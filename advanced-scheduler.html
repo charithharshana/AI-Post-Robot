@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Post Robot - Advanced Scheduler</title>
+  <meta charset="utf-8">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 10px;
+      background: #f7fafc;
+      color: #2d3748;
+      font-size: 14px;
+    }
+    
+    .header {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      margin: 0;
+      color: #667eea;
+      font-size: 20px;
+    }
+    
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 15px;
+      height: calc(100vh - 120px);
+    }
+    
+    .posts-panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .scheduler-panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .panel-header {
+      padding: 15px;
+      border-bottom: 1px solid #e2e8f0;
+      font-weight: 600;
+      color: #4a5568;
+      display: flex;
+      justify-content: between;
+      align-items: center;
+    }
+    
+    .panel-content {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+    }
+    
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #5a67d8;
+    }
+    
+    .btn-success {
+      background: #48bb78;
+      color: white;
+    }
+    
+    .btn-success:hover {
+      background: #38a169;
+    }
+    
+    .btn-warning {
+      background: #ed8936;
+      color: white;
+    }
+    
+    .btn-warning:hover {
+      background: #dd6b20;
+    }
+    
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    
+    .btn-secondary:hover {
+      background: #cbd5e0;
+    }
+    
+    .posts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    
+    .post-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+    }
+    
+    .post-card:hover {
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .post-card.selected {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+    
+    .post-image {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      background: #f7fafc;
+    }
+    
+    .post-content {
+      padding: 10px;
+    }
+    
+    .post-caption {
+      font-size: 12px;
+      color: #4a5568;
+      line-height: 1.4;
+      max-height: 40px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    
+    .post-meta {
+      font-size: 11px;
+      color: #718096;
+      margin-top: 5px;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #4a5568;
+      font-size: 12px;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .form-textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+      resize: vertical;
+      min-height: 60px;
+    }
+    
+    .form-textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .channels-list {
+      max-height: 120px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    
+    .channel-option {
+      display: flex;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    
+    .channel-option input {
+      margin-right: 8px;
+    }
+    
+    .selected-posts-info {
+      background: #f0f4ff;
+      border: 1px solid #667eea;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 12px;
+    }
+    
+    .album-preview {
+      display: flex;
+      gap: 5px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .album-thumb {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .schedule-actions {
+      padding: 15px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    
+    .category-filter {
+      margin-bottom: 15px;
+    }
+    
+    .filter-tabs {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    
+    .filter-tab {
+      padding: 6px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      background: white;
+      color: #4a5568;
+    }
+    
+    .filter-tab.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+    
+    .stats-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #718096;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🚀 Advanced Post Scheduler</h1>
+  </div>
+
+  <div class="main-container">
+    <!-- Posts Selection Panel -->
+    <div class="posts-panel">
+      <div class="panel-header">
+        📋 Content Library
+        <div class="stats-bar">
+          <span id="postsCount">0 posts</span>
+          <span id="selectedCount">0 selected</span>
+        </div>
+      </div>
+      
+      <div class="panel-content">
+        <div class="category-filter">
+          <div class="filter-tabs" id="categoryTabs">
+            <!-- Categories will be loaded here -->
+          </div>
+        </div>
+        
+        <div class="toolbar">
+          <button class="btn btn-secondary" id="selectAllBtn">✅ Select All</button>
+          <button class="btn btn-secondary" id="clearSelectionBtn">❌ Clear Selection</button>
+          <button class="btn btn-warning" id="createAlbumBtn">📁 Create Album</button>
+        </div>
+        
+        <div id="postsContainer" class="posts-grid">
+          <div class="loading">🔄 Loading posts...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scheduler Panel -->
+    <div class="scheduler-panel">
+      <div class="panel-header">
+        ⚙️ Scheduler Settings
+      </div>
+      
+      <div class="panel-content">
+        <div id="selectedPostsInfo" class="selected-posts-info hidden">
+          <!-- Selected posts info will be shown here -->
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">📝 Post Title</label>
+          <input type="text" class="form-input" id="postTitle" placeholder="Enter post title (optional)">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">📄 Caption</label>
+          <textarea class="form-textarea" id="postCaption" placeholder="Enter or edit caption..."></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">🔗 Links</label>
+          <div id="linksEditor">
+            <!-- Links editor will be here -->
+          </div>
+          <button class="btn btn-secondary" id="addLinkBtn">➕ Add Link</button>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">🌍 Timezone</label>
+          <select class="form-input" id="timezoneSelect">
+            <option value="auto">🌍 Auto-detect (Browser timezone)</option>
+            <option value="UTC">🌐 UTC</option>
+            <option value="America/New_York">🇺🇸 Eastern Time</option>
+            <option value="America/Chicago">🇺🇸 Central Time</option>
+            <option value="America/Denver">🇺🇸 Mountain Time</option>
+            <option value="America/Los_Angeles">🇺🇸 Pacific Time</option>
+            <option value="Europe/London">🇬🇧 London</option>
+            <option value="Europe/Paris">🇫🇷 Paris</option>
+            <option value="Asia/Tokyo">🇯🇵 Tokyo</option>
+            <option value="Asia/Shanghai">🇨🇳 Shanghai</option>
+            <option value="Asia/Kolkata">🇮🇳 India</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">📅 Schedule Date & Time</label>
+          <input type="datetime-local" class="form-input" id="scheduleDateTime">
+          <div style="font-size: 11px; color: #718096; margin-top: 2px;" id="timezoneInfo"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">⏱️ Scheduling Options</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+            <input type="number" class="form-input" id="postInterval" value="30" min="5" max="1440" placeholder="Interval (min)">
+            <select class="form-input" id="intervalType">
+              <option value="fixed">Fixed Interval</option>
+              <option value="random">Random Gap</option>
+              <option value="optimal">Optimal Times</option>
+            </select>
+          </div>
+          <div id="intervalOptions" style="font-size: 11px; color: #718096;">
+            Posts will be scheduled every <span id="intervalDisplay">30</span> minutes
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">🎯 Quick Schedule Presets</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('now')">⚡ Now</button>
+            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('1hour')">🕐 +1 Hour</button>
+            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('tomorrow')">🌅 Tomorrow 9AM</button>
+            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('weekend')">🎉 Weekend</button>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">📺 Channels</label>
+          <div class="channels-list" id="channelsList">
+            <div class="loading">🔄 Loading channels...</div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">📦 Publishing Options</label>
+          <div style="display: flex; gap: 10px; margin-top: 5px;">
+            <label style="display: flex; align-items: center; font-size: 12px;">
+              <input type="radio" name="publishType" value="individual" checked style="margin-right: 5px;">
+              Individual Posts
+            </label>
+            <label style="display: flex; align-items: center; font-size: 12px;">
+              <input type="radio" name="publishType" value="album" style="margin-right: 5px;">
+              As Album
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="schedule-actions">
+        <button class="btn btn-success" id="scheduleBtn">🚀 Schedule Posts</button>
+        <button class="btn btn-primary" id="publishNowBtn">⚡ Publish Now</button>
+        <button class="btn btn-secondary" id="viewQueueBtn">📋 View Queue</button>
+        <button class="btn btn-warning" id="testApiBtn" style="background: #f59e0b; border-color: #f59e0b;">🧪 Test API</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="robopost-api.js"></script>
+  <script src="advanced-scheduler.js"></script>
+</body>
+</html>

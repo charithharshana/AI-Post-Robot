@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "AI Post Robot by Charith Harshana",
+  "version": "2.0.0",
+  "description": "Intelligent social media content capture and bulk scheduling tool with RoboPost API integration. Capture text and images from Facebook, Pinterest, Instagram, Threads, and Reddit for automated posting.",
+  "author": "Charith Harshana",
+  "homepage_url": "https://github.com/charithharshana/ai-post-robot",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.facebook.com/*",
+    "*://*.pinterest.com/*",
+    "*://*.instagram.com/*",
+    "*://*.threads.net/*",
+    "*://*.reddit.com/*",
+    "https://public-api.robopost.app/*",
+    "http://public-api.robopost.app/*",
+    "https://httpbin.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["robopost-api.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.facebook.com/*",
+        "*://*.pinterest.com/*",
+        "*://*.instagram.com/*",
+        "*://*.threads.net/*",
+        "*://*.reddit.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Post Robot - Capture & Schedule Content",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "options.html",
+  "minimum_chrome_version": "88"
+}

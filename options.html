@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Post Robot - Settings</title>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f7fafc;
+      color: #2d3748;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .header h1 {
+      margin: 0;
+      color: #667eea;
+      font-size: 28px;
+    }
+    
+    .header .subtitle {
+      color: #718096;
+      margin-top: 5px;
+    }
+    
+    .section {
+      background: white;
+      margin: 20px 0;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .section h2 {
+      margin: 0 0 20px 0;
+      color: #4a5568;
+      font-size: 20px;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 10px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #4a5568;
+    }
+    
+    input[type="text"], input[type="password"], textarea, select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+    
+    input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #5a67d8;
+    }
+    
+    .success {
+      background: #48bb78;
+    }
+    
+    .danger {
+      background: #f56565;
+    }
+    
+    .warning {
+      background: #ed8936;
+    }
+    
+    .status-message {
+      padding: 12px;
+      border-radius: 8px;
+      margin: 10px 0;
+      font-weight: 600;
+      display: none;
+    }
+    
+    .status-success {
+      background: #c6f6d5;
+      color: #22543d;
+      border: 1px solid #9ae6b4;
+    }
+    
+    .status-error {
+      background: #fed7d7;
+      color: #742a2a;
+      border: 1px solid #fc8181;
+    }
+
+    .status-info {
+      background: #e6fffa;
+      color: #234e52;
+      border: 1px solid #81e6d9;
+    }
+    
+    .help-text {
+      font-size: 12px;
+      color: #718096;
+      margin-top: 5px;
+    }
+    
+    .api-status {
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    
+    .api-connected {
+      background: #c6f6d5;
+      color: #22543d;
+      border: 1px solid #9ae6b4;
+    }
+    
+    .api-disconnected {
+      background: #fed7d7;
+      color: #742a2a;
+      border: 1px solid #fc8181;
+    }
+
+    .channels-container {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      background: #f7fafc;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      margin: 4px 0;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s;
+    }
+
+    .channel-item:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .channel-item input[type="checkbox"] {
+      margin-right: 10px;
+      width: auto;
+    }
+
+    .channel-info {
+      flex: 1;
+    }
+
+    .channel-name {
+      font-weight: 600;
+      color: #4a5568;
+    }
+
+    .channel-platform {
+      font-size: 12px;
+      color: #718096;
+      margin-top: 2px;
+    }
+
+    .loading-channels {
+      text-align: center;
+      color: #718096;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🤖 AI Post Robot Settings</h1>
+    <div class="subtitle">Configure your RoboPost API and scheduling preferences</div>
+  </div>
+
+  <div class="section">
+    <h2>🔑 RoboPost API Configuration</h2>
+    <div id="apiStatus" class="api-status api-disconnected">
+      ❌ API Not Connected
+    </div>
+    
+    <div class="form-group">
+      <label for="apiKey">RoboPost API Key</label>
+      <input type="password" id="apiKey" placeholder="Enter your RoboPost API key">
+      <div class="help-text">
+        Get your API key from your dashboard
+      </div>
+    </div>
+    
+    <button id="testApiBtn">🔍 Test API Connection</button>
+    <button id="diagnosticsBtn" class="warning">🔧 Run Diagnostics</button>
+    <button id="saveApiBtn" class="success">💾 Save API Key</button>
+
+    <div id="apiMessage" class="status-message"></div>
+    <div id="diagnosticsResult" class="status-message" style="font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto;"></div>
+  </div>
+
+  <div class="section">
+    <h2>📅 Default Scheduling Settings</h2>
+
+    <div class="form-group">
+      <label for="defaultTimezone">Default Timezone</label>
+      <select id="defaultTimezone">
+        <option value="auto">🌍 Auto-detect (Browser timezone)</option>
+        <option value="UTC">🌐 UTC (Coordinated Universal Time)</option>
+        <option value="America/New_York">🇺🇸 Eastern Time (New York)</option>
+        <option value="America/Chicago">🇺🇸 Central Time (Chicago)</option>
+        <option value="America/Denver">🇺🇸 Mountain Time (Denver)</option>
+        <option value="America/Los_Angeles">🇺🇸 Pacific Time (Los Angeles)</option>
+        <option value="Europe/London">🇬🇧 London (GMT/BST)</option>
+        <option value="Europe/Paris">🇫🇷 Paris (CET/CEST)</option>
+        <option value="Europe/Berlin">🇩🇪 Berlin (CET/CEST)</option>
+        <option value="Asia/Tokyo">🇯🇵 Tokyo (JST)</option>
+        <option value="Asia/Shanghai">🇨🇳 Shanghai (CST)</option>
+        <option value="Asia/Kolkata">🇮🇳 India (IST)</option>
+        <option value="Australia/Sydney">🇦🇺 Sydney (AEST/AEDT)</option>
+      </select>
+      <div class="help-text">Timezone for scheduling posts (affects all date/time selections)</div>
+    </div>
+
+    <div class="form-group">
+      <label for="defaultDelay">Default Scheduling Delay (minutes)</label>
+      <input type="number" id="defaultDelay" value="10" min="1" max="1440">
+      <div class="help-text">How many minutes from now to schedule posts by default</div>
+    </div>
+
+    <div class="form-group">
+      <label for="defaultChannels">Default Channels</label>
+      <div id="channelsList" class="channels-container">
+        <div class="loading-channels">🔄 Connect API to load channels...</div>
+      </div>
+      <div class="help-text">Select default social media channels to post to (automatically loaded from your account)</div>
+    </div>
+
+    <button id="saveSchedulingBtn" class="success">💾 Save Scheduling Settings</button>
+    <div id="schedulingMessage" class="status-message"></div>
+  </div>
+
+
+
+  <div class="section">
+    <h2>📊 Data Management</h2>
+    
+    <div class="form-group">
+      <button id="exportDataBtn" class="warning">📤 Export All Data</button>
+      <button id="clearDataBtn" class="danger">🗑️ Clear All Data</button>
+    </div>
+    
+    <div class="help-text">
+      Export: Download all captured content as CSV<br>
+      Clear: Remove all saved content and reset extension
+    </div>
+    
+    <div id="dataMessage" class="status-message"></div>
+  </div>
+
+  <div class="section">
+    <h2>ℹ️ About</h2>
+    <p><strong>AI Post Robot by Charith Harshana</strong></p>
+    <p>Version 2.0.0</p>
+    <p>Intelligent social media content capture and bulk scheduling tool with RoboPost API integration.</p>
+    <p>
+      <a href="https://github.com/charithharshana/ai-post-robot" target="_blank">GitHub Repository</a>
+    </p>
+  </div>
+
+  <script src="robopost-api.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
