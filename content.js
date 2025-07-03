@@ -1,19 +1,23 @@
 // Enhanced content capture for AI Post Robot
 let captureSettings = {
   autoCapture: true,
-  captionMaxLength: 280
+  captionMaxLength: 280,
+  enableCtrlClick: true
 };
 
 // Load capture settings
-chrome.storage.local.get(['autoCapture', 'captionMaxLength'], (result) => {
+chrome.storage.local.get(['autoCapture', 'captionMaxLength', 'enableCtrlClick'], (result) => {
   captureSettings.autoCapture = result.autoCapture !== false;
   captureSettings.captionMaxLength = result.captionMaxLength || 280;
+  captureSettings.enableCtrlClick = result.enableCtrlClick !== false;
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "showSavedMessage") {
     showSimpleMessage(`✅ Content Captured! Total: ${request.count} | Captions: ${request.textCount} | Links: ${request.linkCount}`);
   } else if (request.action === "updateCaptureSettings") {
+    captureSettings = { ...captureSettings, ...request.settings };
+  } else if (request.action === "updateQuickCaptureSettings") {
     captureSettings = { ...captureSettings, ...request.settings };
   }
 });
@@ -202,6 +206,32 @@ document.addEventListener('mousedown', (e) => {
   }
 });
 
+// Add Ctrl+click listener for quick save functionality
+document.addEventListener('click', (e) => {
+  // Check if Ctrl+click on an image and the feature is enabled
+  if (e.ctrlKey && e.target.tagName === 'IMG' && captureSettings.enableCtrlClick) {
+    e.preventDefault(); // Prevent default behavior
+    e.stopPropagation(); // Stop event bubbling
+
+    const imageUrl = e.target.src;
+    if (!imageUrl) return;
+
+    // Get the nearest caption for this image
+    const nearestCaption = getNearestCaption(e.target);
+    const processedCaption = processCaption(nearestCaption);
+
+    // Send message to background script to save with last used category
+    chrome.runtime.sendMessage({
+      action: "ctrlClickSave",
+      imageUrl: imageUrl,
+      caption: processedCaption
+    });
+
+    // Show visual feedback
+    showCtrlClickFeedback(e.target);
+  }
+});
+
 // Add image hover detection for preview
 document.addEventListener('mouseover', (e) => {
   if (e.target.tagName === 'IMG' && captureSettings.autoCapture) {
@@ -267,4 +297,53 @@ function hideImagePreview() {
   if (preview) {
     preview.remove();
   }
+}
+
+// Show visual feedback for Ctrl+click save
+function showCtrlClickFeedback(imgElement) {
+  const feedback = document.createElement('div');
+  feedback.style.cssText = `
+    position: absolute;
+    background: #48bb78;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 10001;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    animation: ctrlClickPulse 0.6s ease-out;
+  `;
+
+  feedback.textContent = '✅ Quick Saved!';
+
+  // Position near the image
+  const rect = imgElement.getBoundingClientRect();
+  feedback.style.left = (rect.left + window.scrollX + rect.width/2 - 50) + 'px';
+  feedback.style.top = (rect.top + window.scrollY + rect.height/2 - 15) + 'px';
+
+  // Add animation keyframes if not already added
+  if (!document.getElementById('ctrl-click-styles')) {
+    const style = document.createElement('style');
+    style.id = 'ctrl-click-styles';
+    style.textContent = `
+      @keyframes ctrlClickPulse {
+        0% { transform: scale(0.8); opacity: 0; }
+        50% { transform: scale(1.1); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(feedback);
+
+  // Remove after animation
+  setTimeout(() => {
+    if (feedback.parentNode) {
+      feedback.remove();
+    }
+  }, 1500);
 }

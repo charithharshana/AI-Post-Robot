@@ -13,6 +13,9 @@ function setupEventListeners() {
   // Scheduling Settings
   document.getElementById('saveSchedulingBtn').addEventListener('click', saveSchedulingSettings);
 
+  // Quick Capture Settings
+  document.getElementById('saveQuickCaptureBtn').addEventListener('click', saveQuickCaptureSettings);
+
   // Data Management
   document.getElementById('exportDataBtn').addEventListener('click', exportAllData);
   document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
@@ -24,7 +27,8 @@ function loadSettings() {
     'defaultDelay',
     'defaultChannels',
     'defaultTimezone',
-    'channelsData'
+    'channelsData',
+    'enableCtrlClick'
   ], (result) => {
     // API Settings
     if (result.robopostApiKey) {
@@ -36,6 +40,9 @@ function loadSettings() {
     // Scheduling Settings
     document.getElementById('defaultDelay').value = result.defaultDelay || 10;
     document.getElementById('defaultTimezone').value = result.defaultTimezone || 'auto';
+
+    // Quick Capture Settings
+    document.getElementById('enableCtrlClick').checked = result.enableCtrlClick !== false;
   });
 }
 
@@ -183,6 +190,28 @@ function saveSchedulingSettings() {
     defaultChannels: selectedChannels.join('\n')
   }, () => {
     showButtonMessage('saveSchedulingBtn', '✅ Settings saved!', '💾 Save Scheduling Settings');
+  });
+}
+
+function saveQuickCaptureSettings() {
+  const enableCtrlClick = document.getElementById('enableCtrlClick').checked;
+
+  chrome.storage.local.set({
+    enableCtrlClick: enableCtrlClick
+  }, () => {
+    showButtonMessage('saveQuickCaptureBtn', '✅ Quick Capture settings saved!', '💾 Save Quick Capture Settings');
+
+    // Notify all content scripts about the setting change
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: "updateQuickCaptureSettings",
+          settings: { enableCtrlClick: enableCtrlClick }
+        }).catch(() => {
+          // Ignore errors for tabs that don't have content scripts
+        });
+      });
+    });
   });
 }
 

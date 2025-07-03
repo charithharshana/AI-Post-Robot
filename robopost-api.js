@@ -620,22 +620,31 @@ class RoboPostAPI {
       channelIds,
       scheduleAt,
       title,
+      storageId, // Add support for pre-uploaded media
       platformSettings = {}
     } = options;
 
     try {
       console.log('🔄 Starting post scheduling...');
 
-      // Step 1: Upload media (like Python upload_image_to_robopost)
-      const storageId = await this.uploadMediaFromUrl(imageUrl);
-      console.log('✅ Media uploaded, storage_id:', storageId);
+      let mediaStorageId;
+
+      // Step 1: Use existing storageId or upload media
+      if (storageId) {
+        console.log('✅ Using existing storage_id:', storageId);
+        mediaStorageId = storageId;
+      } else {
+        // Upload media from URL (like Python upload_image_to_robopost)
+        mediaStorageId = await this.uploadMediaFromUrl(imageUrl);
+        console.log('✅ Media uploaded, storage_id:', mediaStorageId);
+      }
 
       // Step 2: Create simple payload (exactly like Python schedule_facebook_image)
       const payload = {
         text: caption || '',
         channel_ids: channelIds,
         schedule_at: scheduleAt,
-        image_object_ids: [storageId],
+        image_object_ids: [mediaStorageId],
         is_draft: false
       };
 
@@ -1065,49 +1074,7 @@ class RoboPostAPI {
     }
   }
 
-  /**
-   * Get scheduled posts queue
-   * @returns {Promise<Array>} List of scheduled posts
-   */
-  async getScheduledPosts() {
-    if (!this.apiKey) {
-      throw new Error('API key not configured');
-    }
 
-    try {
-      const response = await fetch(`${this.baseUrl}/posts/scheduled?apikey=${this.apiKey}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch scheduled posts: ${response.status} ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      throw new Error(`Failed to get scheduled posts: ${error.message}`);
-    }
-  }
-
-  /**
-   * Cancel a scheduled post
-   * @param {string} postId - ID of the post to cancel
-   */
-  async cancelScheduledPost(postId) {
-    if (!this.apiKey) {
-      throw new Error('API key not configured');
-    }
-
-    try {
-      const response = await fetch(`${this.baseUrl}/posts/${postId}/cancel?apikey=${this.apiKey}`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to cancel post: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      throw new Error(`Failed to cancel scheduled post: ${error.message}`);
-    }
-  }
 
   /**
    * Get posting analytics and optimal times

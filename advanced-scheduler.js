@@ -25,7 +25,10 @@ async function initializeAdvancedScheduler() {
     
     // Load default settings
     await loadDefaultSettings();
-    
+
+    // Load custom presets
+    await loadCustomPresets();
+
   } catch (error) {
     console.error('Initialization error:', error);
     showError(`Initialization error: ${error.message}`);
@@ -138,16 +141,29 @@ function loadPosts() {
   
   // Add click listeners to post cards
   container.querySelectorAll('.post-card').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (event) => {
       const postId = card.dataset.postId;
-      togglePostSelection(postId, card);
+      togglePostSelection(postId, card, event);
     });
   });
   
   updateStats();
 }
 
-function togglePostSelection(postId, cardElement) {
+function togglePostSelection(postId, cardElement, event) {
+  // If Ctrl key is not pressed, clear all previous selections first
+  if (!event.ctrlKey && !event.metaKey) {
+    // Clear all previous selections
+    selectedPosts.forEach(selectedId => {
+      const selectedCard = document.querySelector(`[data-post-id="${selectedId}"]`);
+      if (selectedCard) {
+        selectedCard.classList.remove('selected');
+      }
+    });
+    selectedPosts.clear();
+  }
+
+  // Toggle the clicked post
   if (selectedPosts.has(postId)) {
     selectedPosts.delete(postId);
     cardElement.classList.remove('selected');
@@ -155,7 +171,7 @@ function togglePostSelection(postId, cardElement) {
     selectedPosts.add(postId);
     cardElement.classList.add('selected');
   }
-  
+
   updateSelectedPostsInfo();
   updateStats();
 }
@@ -192,19 +208,33 @@ function updateSelectedPostsInfo() {
   
   infoContainer.innerHTML = html;
   
-  // Update caption with first selected post's caption
+  // Update caption and title with selected post's data
   if (selectedPosts.size > 0) {
     const firstPost = getPostById(Array.from(selectedPosts)[0]);
     if (firstPost) {
       const captionTextarea = document.getElementById('postCaption');
       const titleInput = document.getElementById('postTitle');
 
-      // Only update if fields are empty to avoid overwriting user edits
-      if (!captionTextarea.value.trim()) {
+      // Always update fields when a single post is selected
+      if (selectedPosts.size === 1) {
         captionTextarea.value = firstPost.caption || '';
-      }
-      if (!titleInput.value.trim()) {
         titleInput.value = firstPost.caption || '';
+
+        // Add visual feedback to show fields were updated
+        captionTextarea.style.background = '#e6fffa';
+        titleInput.style.background = '#e6fffa';
+        setTimeout(() => {
+          captionTextarea.style.background = '';
+          titleInput.style.background = '';
+        }, 1000);
+      } else {
+        // For multiple posts, only update if fields are empty to avoid overwriting user edits
+        if (!captionTextarea.value.trim()) {
+          captionTextarea.value = firstPost.caption || '';
+        }
+        if (!titleInput.value.trim()) {
+          titleInput.value = firstPost.caption || '';
+        }
       }
 
       // Update character count
@@ -347,6 +377,7 @@ function updateIntervalDisplay() {
 }
 
 function setQuickSchedule(preset) {
+  console.log('setQuickSchedule called with preset:', preset);
   const now = new Date();
   let scheduleTime;
 
@@ -372,9 +403,37 @@ function setQuickSchedule(preset) {
       return;
   }
 
-  const localTime = new Date(scheduleTime.getTime() - scheduleTime.getTimezoneOffset() * 60000);
-  document.getElementById('scheduleDateTime').value = localTime.toISOString().slice(0, 16);
-  updateTimezoneInfo();
+  // Ensure the input field exists before setting value
+  const scheduleInput = document.getElementById('scheduleDateTime');
+  if (scheduleInput) {
+    // Format datetime for datetime-local input (YYYY-MM-DDTHH:MM)
+    const year = scheduleTime.getFullYear();
+    const month = String(scheduleTime.getMonth() + 1).padStart(2, '0');
+    const day = String(scheduleTime.getDate()).padStart(2, '0');
+    const hours = String(scheduleTime.getHours()).padStart(2, '0');
+    const minutes = String(scheduleTime.getMinutes()).padStart(2, '0');
+
+    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    scheduleInput.value = formattedDateTime;
+
+    // Add visual feedback to show the preset was applied
+    scheduleInput.style.background = '#e6fffa';
+    scheduleInput.style.border = '2px solid #38b2ac';
+    setTimeout(() => {
+      scheduleInput.style.background = '';
+      scheduleInput.style.border = '';
+    }, 1500);
+
+    updateTimezoneInfo();
+
+    // Show a brief confirmation message with actual time
+    const timeString = scheduleTime.toLocaleString();
+    showMessage(`⏰ Schedule set to ${timeString}`, 'success');
+
+    console.log(`Quick schedule preset '${preset}' applied: ${formattedDateTime} (${timeString})`);
+  } else {
+    console.error('Schedule input field not found');
+  }
 }
 
 function setupEventListeners() {
@@ -383,10 +442,17 @@ function setupEventListeners() {
   document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
   document.getElementById('createAlbumBtn').addEventListener('click', createAlbum);
 
+  // CSV Import buttons
+  document.getElementById('csvImportBtn').addEventListener('click', showCsvImport);
+  document.getElementById('closeCsvImportBtn').addEventListener('click', hideCsvImport);
+  document.getElementById('csvFileInput').addEventListener('change', handleCsvFileSelect);
+  document.getElementById('confirmCsvImportBtn').addEventListener('click', confirmCsvImport);
+  document.getElementById('cancelCsvImportBtn').addEventListener('click', hideCsvImport);
+
   // Schedule buttons
   document.getElementById('scheduleBtn').addEventListener('click', schedulePosts);
   document.getElementById('publishNowBtn').addEventListener('click', publishNow);
-  document.getElementById('viewQueueBtn').addEventListener('click', viewScheduleQueue);
+  document.getElementById('uploadPcBtn').addEventListener('click', uploadFromPC);
   document.getElementById('testApiBtn').addEventListener('click', testRoboPostAPI);
 
   // Links editor
@@ -399,6 +465,24 @@ function setupEventListeners() {
 
   // Title sync
   document.getElementById('postTitle').addEventListener('input', syncTitleToCaption);
+
+  // Quick Schedule Presets
+  document.getElementById('quickPresetButtons').addEventListener('click', (e) => {
+    if (e.target.dataset.preset) {
+      console.log('Preset clicked:', e.target.dataset.preset);
+      const preset = e.target.dataset.preset;
+
+      if (preset.startsWith('custom_')) {
+        const index = parseInt(preset.split('_')[1]);
+        executeCustomPreset(index);
+      } else {
+        setQuickSchedule(preset);
+      }
+    }
+  });
+
+  // Custom preset management
+  document.getElementById('addCustomPresetBtn').addEventListener('click', showCustomPresetDialog);
 }
 
 function updateCaptionCharCount() {
@@ -524,99 +608,89 @@ function showError(message) {
   alert(`Error: ${message}`);
 }
 
-async function viewScheduleQueue() {
-  try {
-    const scheduledPosts = await window.roboPostAPI.getScheduledPosts();
+async function uploadFromPC() {
+  console.log('📁 Opening file picker for PC upload...');
 
-    if (scheduledPosts.length === 0) {
-      alert('📭 No posts in the schedule queue');
-      return;
-    }
+  // Create file input element
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*,video/*';
+  fileInput.multiple = false;
 
-    // Create a simple queue viewer
-    let queueHtml = `
-      <div style="max-width: 600px; max-height: 400px; overflow-y: auto; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <h3 style="margin: 0 0 15px 0; color: #667eea;">📋 Scheduled Posts Queue</h3>
-        <div style="display: grid; gap: 10px;">
-    `;
+  fileInput.onchange = async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
 
-    scheduledPosts.forEach((post, index) => {
-      const scheduleDate = new Date(post.schedule_at).toLocaleString();
-      const channels = post.channels ? post.channels.map(c => c.name).join(', ') : 'Unknown channels';
+    console.log('📁 Selected file:', file.name, file.size, 'bytes');
 
-      queueHtml += `
-        <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #f7fafc;">
-          <div style="font-weight: 600; margin-bottom: 5px;">${post.text || 'No caption'}</div>
-          <div style="font-size: 12px; color: #718096;">
-            📅 ${scheduleDate}<br>
-            📺 ${channels}<br>
-            🖼️ ${post.image_object_ids ? post.image_object_ids.length : 0} image(s)
-          </div>
-          <button onclick="cancelPost('${post.id}')" style="margin-top: 8px; padding: 4px 8px; background: #f56565; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">❌ Cancel</button>
-        </div>
-      `;
-    });
+    // Set loading state
+    setButtonLoading('uploadPcBtn', true);
 
-    queueHtml += `
-        </div>
-        <div style="text-align: center; margin-top: 15px;">
-          <button onclick="closeQueueViewer()" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
-        </div>
-      </div>
-    `;
-
-    // Create overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'queueOverlay';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    `;
-    overlay.innerHTML = queueHtml;
-
-    document.body.appendChild(overlay);
-
-    // Close on overlay click
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        closeQueueViewer();
+    try {
+      // Validate file size (50MB limit like Python)
+      if (file.size > 50 * 1024 * 1024) {
+        throw new Error('File is too large (>50MB). Please use a smaller file.');
       }
-    });
 
-  } catch (error) {
-    showError(`Failed to load schedule queue: ${error.message}`);
-  }
-}
+      if (file.size === 0) {
+        throw new Error('File is empty (0 bytes)');
+      }
 
-function closeQueueViewer() {
-  const overlay = document.getElementById('queueOverlay');
-  if (overlay) {
-    overlay.remove();
-  }
-}
+      // Upload to RoboPost media
+      console.log('📤 Uploading file to RoboPost...');
+      const storageId = await window.roboPostAPI.uploadMedia(file);
+      console.log('✅ File uploaded, storage_id:', storageId);
 
-async function cancelPost(postId) {
-  if (!confirm('Are you sure you want to cancel this scheduled post?')) {
-    return;
-  }
+      // Extract filename without extension for title/caption
+      const fileName = file.name.replace(/\.[^/.]+$/, "");
 
-  try {
-    await window.roboPostAPI.cancelScheduledPost(postId);
-    alert('✅ Post cancelled successfully');
-    closeQueueViewer();
-    // Optionally refresh the queue view
-    setTimeout(() => viewScheduleQueue(), 500);
-  } catch (error) {
-    showError(`Failed to cancel post: ${error.message}`);
-  }
+      // Create post object - always save to "My PC" category
+      const pcCategory = 'My PC';
+      const postId = Date.now().toString();
+      const newPost = {
+        id: postId,
+        title: fileName,
+        caption: fileName,
+        imageUrl: URL.createObjectURL(file), // For preview
+        storageId: storageId,
+        category: pcCategory,
+        timestamp: Date.now(),
+        source: 'pc_upload',
+        filename: file.name
+      };
+
+      // Ensure "My PC" category exists in categories list
+      if (!categories.includes(pcCategory)) {
+        categories.push(pcCategory);
+      }
+
+      // Add to saved items in "My PC" category
+      if (!savedItems[pcCategory]) {
+        savedItems[pcCategory] = [];
+      }
+      savedItems[pcCategory].push(newPost);
+
+      // Save to storage (include both savedItems and categories)
+      await new Promise(resolve => {
+        chrome.storage.local.set({ savedItems, categories }, resolve);
+      });
+
+      // Refresh the UI
+      await loadSavedData();
+
+      showMessage(`✅ File "${file.name}" uploaded successfully and added to library!`, 'success');
+
+    } catch (error) {
+      console.error('❌ PC upload failed:', error);
+      showError(`Failed to upload file: ${error.message}`);
+    } finally {
+      // Reset loading state
+      setButtonLoading('uploadPcBtn', false);
+    }
+  };
+
+  // Trigger file picker
+  fileInput.click();
 }
 
 async function schedulePosts() {
@@ -624,29 +698,32 @@ async function schedulePosts() {
     alert('Please select at least one post to schedule');
     return;
   }
-  
+
   // Get selected channels
   const selectedChannels = [];
   document.querySelectorAll('#channelsList input:checked').forEach(checkbox => {
     selectedChannels.push(checkbox.value);
   });
-  
+
   if (selectedChannels.length === 0) {
     alert('Please select at least one channel');
     return;
   }
-  
+
   const scheduleDateTime = document.getElementById('scheduleDateTime').value;
   if (!scheduleDateTime) {
     alert('Please select a schedule date and time');
     return;
   }
-  
+
   const publishType = document.querySelector('input[name="publishType"]:checked').value;
   const postInterval = parseInt(document.getElementById('postInterval').value) || 30;
   const caption = document.getElementById('postCaption').value;
   const title = document.getElementById('postTitle').value;
-  
+
+  // Set loading state
+  setButtonLoading('scheduleBtn', true);
+
   try {
     // Ensure API is initialized
     const isInitialized = await window.roboPostAPI.initialize();
@@ -668,12 +745,15 @@ async function schedulePosts() {
       await scheduleIndividualPosts(selectedChannels, scheduleDateTime, postInterval, caption, title);
     }
 
-    alert('Posts scheduled successfully!');
+    showMessage('✅ Posts scheduled successfully!', 'success');
     clearSelection();
 
   } catch (error) {
     console.error('Scheduling error:', error);
     showError(`Failed to schedule posts: ${error.message}`);
+  } finally {
+    // Reset loading state
+    setButtonLoading('scheduleBtn', false);
   }
 }
 
@@ -702,6 +782,9 @@ async function publishNow() {
   const now = new Date();
   const publishTime = new Date(now.getTime() + 30000).toISOString();
 
+  // Set loading state
+  setButtonLoading('publishNowBtn', true);
+
   try {
     // Ensure API is initialized
     const isInitialized = await window.roboPostAPI.initialize();
@@ -729,11 +812,11 @@ async function publishNow() {
         title: title
       });
 
-      alert('Album published successfully!');
+      showMessage('✅ Album published successfully!', 'success');
     } else {
       // Publish individual posts with 1-minute intervals to avoid spam
       await scheduleIndividualPosts(selectedChannels, publishTime, 1, caption, title);
-      alert('Posts published successfully!');
+      showMessage('✅ Posts published successfully!', 'success');
     }
 
     clearSelection();
@@ -741,6 +824,9 @@ async function publishNow() {
   } catch (error) {
     console.error('Publishing error:', error);
     showError(`Failed to publish posts: ${error.message}`);
+  } finally {
+    // Reset loading state
+    setButtonLoading('publishNowBtn', false);
   }
 }
 
@@ -802,13 +888,21 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
     }
 
     try {
-      await window.roboPostAPI.schedulePostFromCapture({
+      const scheduleOptions = {
         imageUrl: post.imageUrl,
         caption: caption || post.caption,
         channelIds: channels,
         scheduleAt: scheduleTime.toISOString(),
         title: title
-      });
+      };
+
+      // If post has storageId (from PC upload), use it directly
+      if (post.storageId) {
+        scheduleOptions.storageId = post.storageId;
+        console.log(`Using existing storage_id for post ${i + 1}:`, post.storageId);
+      }
+
+      await window.roboPostAPI.schedulePostFromCapture(scheduleOptions);
 
       console.log(`Post ${i + 1} scheduled for ${scheduleTime}`);
 
@@ -824,6 +918,9 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
 
 // Test RoboPost API function
 async function testRoboPostAPI() {
+  // Set loading state
+  setButtonLoading('testApiBtn', true);
+
   try {
     showMessage('Testing RoboPost API...', 'info');
 
@@ -839,6 +936,9 @@ async function testRoboPostAPI() {
   } catch (error) {
     showMessage(`❌ API test error: ${error.message}`, 'error');
     console.error('❌ API Test Error:', error);
+  } finally {
+    // Reset loading state
+    setButtonLoading('testApiBtn', false);
   }
 }
 
@@ -882,6 +982,470 @@ function showMessage(message, type = 'info') {
       messageEl.parentNode.removeChild(messageEl);
     }
   }, 5000);
+}
+
+// Helper function to manage button loading states
+function setButtonLoading(buttonId, isLoading, originalText = null) {
+  const button = document.getElementById(buttonId);
+  if (!button) return;
+
+  if (isLoading) {
+    // Store original text if not provided
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent;
+    }
+
+    // Set loading state
+    button.disabled = true;
+    button.style.opacity = '0.7';
+    button.style.cursor = 'not-allowed';
+
+    // Add loading spinner and text based on button type
+    const loadingTexts = {
+      'scheduleBtn': '🔄 Scheduling...',
+      'publishNowBtn': '🔄 Publishing...',
+      'viewQueueBtn': '🔄 Loading Queue...',
+      'testApiBtn': '🔄 Testing API...'
+    };
+
+    button.textContent = loadingTexts[buttonId] || '🔄 Loading...';
+  } else {
+    // Reset button state
+    button.disabled = false;
+    button.style.opacity = '';
+    button.style.cursor = '';
+    button.textContent = originalText || button.dataset.originalText || button.textContent;
+
+    // Clean up stored original text
+    if (button.dataset.originalText) {
+      delete button.dataset.originalText;
+    }
+  }
+}
+
+// Custom Presets functionality
+let customPresets = [];
+
+async function loadCustomPresets() {
+  try {
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['customPresets'], resolve);
+    });
+    customPresets = result.customPresets || [];
+    renderCustomPresets();
+  } catch (error) {
+    console.error('Failed to load custom presets:', error);
+  }
+}
+
+function renderCustomPresets() {
+  const container = document.getElementById('quickPresetButtons');
+
+  // Remove existing custom presets
+  container.querySelectorAll('[data-custom="true"]').forEach(btn => btn.remove());
+
+  // Add custom presets
+  customPresets.forEach((preset, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-secondary';
+    button.dataset.preset = `custom_${index}`;
+    button.dataset.custom = 'true';
+    button.innerHTML = `${preset.icon || '⏰'} ${preset.name}`;
+    button.style.position = 'relative';
+
+    // Add delete button
+    const deleteBtn = document.createElement('span');
+    deleteBtn.innerHTML = '✖';
+    deleteBtn.className = 'preset-delete-btn';
+    deleteBtn.style.cssText = `
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: #e53e3e;
+      color: white;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      font-size: 10px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+    `;
+
+    button.appendChild(deleteBtn);
+
+    // Show delete button on hover
+    button.addEventListener('mouseenter', () => {
+      deleteBtn.style.display = 'flex';
+    });
+    button.addEventListener('mouseleave', () => {
+      deleteBtn.style.display = 'none';
+    });
+
+    // Handle delete
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteCustomPreset(index);
+    });
+
+    container.appendChild(button);
+  });
+}
+
+function showCustomPresetDialog() {
+  document.getElementById('customPresetDialog').style.display = 'flex';
+
+  // Reset form
+  document.getElementById('customPresetName').value = '';
+  document.getElementById('customPresetIcon').value = '';
+  document.getElementById('customPresetType').value = 'relative';
+  showPresetOptions('relative');
+
+  // Setup event listeners for the dialog
+  setupCustomPresetDialogListeners();
+}
+
+function setupCustomPresetDialogListeners() {
+  // Close dialog
+  document.getElementById('closeCustomPresetDialog').onclick = hideCustomPresetDialog;
+  document.getElementById('cancelCustomPresetBtn').onclick = hideCustomPresetDialog;
+
+  // Save preset
+  document.getElementById('saveCustomPresetBtn').onclick = saveCustomPreset;
+
+  // Type change
+  document.getElementById('customPresetType').onchange = (e) => {
+    showPresetOptions(e.target.value);
+  };
+}
+
+function hideCustomPresetDialog() {
+  document.getElementById('customPresetDialog').style.display = 'none';
+}
+
+function showPresetOptions(type) {
+  // Hide all options
+  document.querySelectorAll('.preset-options').forEach(el => {
+    el.style.display = 'none';
+  });
+
+  // Show selected option
+  const optionId = type + (type === 'relative' ? 'TimeOptions' : type === 'absolute' ? 'TimeOptions' : 'Options');
+  const element = document.getElementById(optionId);
+  if (element) {
+    element.style.display = 'block';
+  }
+}
+
+async function saveCustomPreset() {
+  const name = document.getElementById('customPresetName').value.trim();
+  const icon = document.getElementById('customPresetIcon').value.trim();
+  const type = document.getElementById('customPresetType').value;
+
+  if (!name) {
+    showMessage('❌ Please enter a preset name', 'error');
+    return;
+  }
+
+  const preset = {
+    name: name,
+    icon: icon || '⏰',
+    type: type
+  };
+
+  // Get type-specific settings
+  switch (type) {
+    case 'relative':
+      preset.amount = parseInt(document.getElementById('relativeAmount').value) || 30;
+      preset.unit = document.getElementById('relativeUnit').value;
+      break;
+    case 'absolute':
+      preset.time = document.getElementById('absoluteTime').value;
+      preset.dateOffset = parseInt(document.getElementById('absoluteDateOffset').value) || 0;
+      break;
+    case 'next_day':
+      preset.weekday = parseInt(document.getElementById('nextDayWeekday').value);
+      preset.time = document.getElementById('nextDayTime').value;
+      break;
+  }
+
+  // Save to storage
+  customPresets.push(preset);
+
+  try {
+    await new Promise(resolve => {
+      chrome.storage.local.set({ customPresets }, resolve);
+    });
+
+    renderCustomPresets();
+    hideCustomPresetDialog();
+    showMessage(`✅ Custom preset "${name}" created successfully!`, 'success');
+  } catch (error) {
+    showMessage(`❌ Failed to save preset: ${error.message}`, 'error');
+  }
+}
+
+async function deleteCustomPreset(index) {
+  if (!confirm(`Delete preset "${customPresets[index].name}"?`)) {
+    return;
+  }
+
+  customPresets.splice(index, 1);
+
+  try {
+    await new Promise(resolve => {
+      chrome.storage.local.set({ customPresets }, resolve);
+    });
+
+    renderCustomPresets();
+    showMessage('✅ Preset deleted successfully!', 'success');
+  } catch (error) {
+    showMessage(`❌ Failed to delete preset: ${error.message}`, 'error');
+  }
+}
+
+function executeCustomPreset(index) {
+  const preset = customPresets[index];
+  if (!preset) return;
+
+  const now = new Date();
+  let scheduleTime;
+
+  switch (preset.type) {
+    case 'relative':
+      const multiplier = preset.unit === 'minutes' ? 60000 :
+                        preset.unit === 'hours' ? 3600000 :
+                        86400000; // days
+      scheduleTime = new Date(now.getTime() + (preset.amount * multiplier));
+      break;
+
+    case 'absolute':
+      scheduleTime = new Date(now);
+      scheduleTime.setDate(scheduleTime.getDate() + preset.dateOffset);
+      const [hours, minutes] = preset.time.split(':');
+      scheduleTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      break;
+
+    case 'next_day':
+      scheduleTime = new Date(now);
+      const daysUntilTarget = (preset.weekday - scheduleTime.getDay() + 7) % 7;
+      if (daysUntilTarget === 0) {
+        // If it's the same day, schedule for next week
+        scheduleTime.setDate(scheduleTime.getDate() + 7);
+      } else {
+        scheduleTime.setDate(scheduleTime.getDate() + daysUntilTarget);
+      }
+      const [nextHours, nextMinutes] = preset.time.split(':');
+      scheduleTime.setHours(parseInt(nextHours), parseInt(nextMinutes), 0, 0);
+      break;
+  }
+
+  if (scheduleTime) {
+    // Update the schedule input
+    const scheduleInput = document.getElementById('scheduleDateTime');
+    if (scheduleInput) {
+      const year = scheduleTime.getFullYear();
+      const month = String(scheduleTime.getMonth() + 1).padStart(2, '0');
+      const day = String(scheduleTime.getDate()).padStart(2, '0');
+      const hours = String(scheduleTime.getHours()).padStart(2, '0');
+      const minutes = String(scheduleTime.getMinutes()).padStart(2, '0');
+
+      const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+      scheduleInput.value = formattedDateTime;
+
+      // Visual feedback
+      scheduleInput.style.background = '#e6fffa';
+      scheduleInput.style.border = '2px solid #38b2ac';
+      setTimeout(() => {
+        scheduleInput.style.background = '';
+        scheduleInput.style.border = '';
+      }, 1500);
+
+      const timeString = scheduleTime.toLocaleString();
+      showMessage(`⏰ ${preset.name} preset applied: ${timeString}`, 'success');
+    }
+  }
+}
+
+// CSV Import functionality
+let csvData = [];
+
+function showCsvImport() {
+  document.getElementById('csvImportSection').style.display = 'block';
+  document.getElementById('csvPreview').style.display = 'none';
+  document.getElementById('csvFileInput').value = '';
+  csvData = [];
+}
+
+function hideCsvImport() {
+  document.getElementById('csvImportSection').style.display = 'none';
+  document.getElementById('csvPreview').style.display = 'none';
+  document.getElementById('csvFileInput').value = '';
+  csvData = [];
+}
+
+function handleCsvFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    showMessage('❌ Please select a CSV file', 'error');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const csvText = e.target.result;
+      csvData = parseCsv(csvText);
+
+      if (csvData.length === 0) {
+        showMessage('❌ CSV file is empty or invalid', 'error');
+        return;
+      }
+
+      showCsvPreview(csvData);
+    } catch (error) {
+      showMessage(`❌ Error reading CSV: ${error.message}`, 'error');
+    }
+  };
+
+  reader.readAsText(file);
+}
+
+function parseCsv(csvText) {
+  const lines = csvText.trim().split('\n');
+  const data = [];
+
+  // Skip header row if it exists
+  const startIndex = lines[0].toLowerCase().includes('imageurl') || lines[0].toLowerCase().includes('caption') ? 1 : 0;
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Simple CSV parsing (handles basic cases)
+    const columns = line.split(',').map(col => col.trim().replace(/^["']|["']$/g, ''));
+
+    if (columns.length >= 2) {
+      data.push({
+        imageUrl: columns[0] || '',
+        caption: columns[1] || '',
+        title: columns[2] || columns[1] || '', // Use caption as title if title not provided
+        category: columns[3] || 'CSV Import'
+      });
+    }
+  }
+
+  return data;
+}
+
+function showCsvPreview(data) {
+  const previewContainer = document.getElementById('csvPreview');
+  const previewContent = document.getElementById('csvPreviewContent');
+
+  // Show first 5 rows for preview
+  const previewData = data.slice(0, 5);
+
+  let tableHtml = `
+    <table class="csv-preview-table">
+      <thead>
+        <tr>
+          <th>Image URL</th>
+          <th>Caption</th>
+          <th>Title</th>
+          <th>Category</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  previewData.forEach(row => {
+    const truncatedUrl = row.imageUrl.length > 30 ? row.imageUrl.substring(0, 30) + '...' : row.imageUrl;
+    const truncatedCaption = row.caption.length > 40 ? row.caption.substring(0, 40) + '...' : row.caption;
+    const truncatedTitle = row.title.length > 30 ? row.title.substring(0, 30) + '...' : row.title;
+
+    tableHtml += `
+      <tr>
+        <td>${truncatedUrl}</td>
+        <td>${truncatedCaption}</td>
+        <td>${truncatedTitle}</td>
+        <td>${row.category}</td>
+      </tr>
+    `;
+  });
+
+  tableHtml += `
+      </tbody>
+    </table>
+    <p style="margin-top: 10px; font-size: 11px; color: #718096;">
+      Total rows to import: ${data.length}
+    </p>
+  `;
+
+  previewContent.innerHTML = tableHtml;
+  previewContainer.style.display = 'block';
+}
+
+async function confirmCsvImport() {
+  if (csvData.length === 0) {
+    showMessage('❌ No data to import', 'error');
+    return;
+  }
+
+  try {
+    // Get current saved items
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['savedItems', 'categories'], resolve);
+    });
+
+    const savedItems = result.savedItems || {};
+    const categories = result.categories || [];
+
+    let importedCount = 0;
+
+    // Process each CSV row
+    csvData.forEach(row => {
+      if (!row.imageUrl || !row.caption) return; // Skip invalid rows
+
+      const category = row.category || 'CSV Import';
+
+      // Add category if it doesn't exist
+      if (!categories.includes(category)) {
+        categories.push(category);
+      }
+
+      // Add post to category
+      if (!savedItems[category]) {
+        savedItems[category] = [];
+      }
+
+      savedItems[category].push({
+        imageUrl: row.imageUrl,
+        caption: row.caption,
+        title: row.title
+      });
+
+      importedCount++;
+    });
+
+    // Save to storage
+    await new Promise(resolve => {
+      chrome.storage.local.set({ savedItems, categories }, resolve);
+    });
+
+    // Refresh the UI
+    await loadSavedData();
+
+    showMessage(`✅ Successfully imported ${importedCount} posts`, 'success');
+    hideCsvImport();
+
+  } catch (error) {
+    showMessage(`❌ Import failed: ${error.message}`, 'error');
+  }
 }
 
 // Initialize when DOM is loaded

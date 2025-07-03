@@ -32,6 +32,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       });
       break;
+    case "ctrlClickSave":
+      // Handle Ctrl+click save with last used category
+      const imageUrl = request.imageUrl;
+      const caption = request.caption || selectedText.replace(/[\n\r]+/g, ' ').trim();
+
+      chrome.storage.local.get(["savedItems", "counters", "lastUsedCategory"], (result) => {
+        const savedItems = result.savedItems || {};
+        const counters = result.counters || { captionCount: 0, linkCount: 0 };
+        const category = result.lastUsedCategory || categories[0] || 'General';
+
+        if (!savedItems[category]) savedItems[category] = [];
+        savedItems[category].push({ imageUrl, caption });
+
+        // Update counters
+        if (caption.trim()) counters.captionCount++;
+        if (imageUrl) counters.linkCount++;
+
+        chrome.storage.local.set({ savedItems, counters }, () => {
+          updateBadgeText(savedItems);
+          const totalCount = getTotalCount(savedItems);
+          chrome.tabs.sendMessage(sender.tab.id, {
+            action: "showSavedMessage",
+            count: totalCount,
+            textCount: counters.captionCount,
+            linkCount: counters.linkCount
+          });
+        });
+      });
+      break;
     case "testRoboPostAPI":
       // Handle API testing if needed
       sendResponse({ success: true });
@@ -415,7 +444,9 @@ chrome.runtime.onInstalled.addListener(() => {
     defaultChannels: '',
     autoCapture: true,
     captionMaxLength: 280,
-    robopostApiKey: ''
+    robopostApiKey: '',
+    enableCtrlClick: true,
+    lastUsedCategory: categories[0] || 'General'
   });
 
   // Set initial badge with black background and white text
@@ -531,19 +562,24 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     const imageUrl = info.srcUrl;
     // Clean the caption when saving
     const caption = selectedText.replace(/[\n\r]+/g, ' ').trim();
-    
+
     chrome.storage.local.get(["savedItems", "counters"], (result) => {
       const savedItems = result.savedItems || {};
       const counters = result.counters || { captionCount: 0, linkCount: 0 };
-      
+
       if (!savedItems[category]) savedItems[category] = [];
       savedItems[category].push({ imageUrl, caption });
-      
+
       // Update counters
       if (caption.trim()) counters.captionCount++;
       if (imageUrl) counters.linkCount++;
-      
-      chrome.storage.local.set({ savedItems, counters }, () => {
+
+      // Store the last used category for Ctrl+click feature
+      chrome.storage.local.set({
+        savedItems,
+        counters,
+        lastUsedCategory: category
+      }, () => {
         updateBadgeText(savedItems);
         const totalCount = getTotalCount(savedItems);
         chrome.tabs.sendMessage(tab.id, {

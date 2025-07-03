@@ -61,8 +61,8 @@
       font-weight: 600;
       color: #4a5568;
       display: flex;
-      justify-content: between;
-      align-items: center;
+      flex-direction: column;
+      gap: 8px;
     }
     
     .panel-content {
@@ -317,9 +317,169 @@
     .stats-bar {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
+      align-items: center;
+      font-size: 12px;
       color: #718096;
+      background: #f7fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      margin: 0;
+    }
+
+    .stats-bar span {
+      font-weight: 500;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      color: #2d3748;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .csv-import-section {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin: 10px 0;
+      padding: 15px;
+    }
+
+    .csv-import-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 10px;
+    }
+
+    .csv-import-header h4 {
+      margin: 0;
+      color: #4a5568;
+      font-size: 14px;
+    }
+
+    .csv-file-input {
+      width: 100%;
+      padding: 8px;
+      border: 2px dashed #cbd5e0;
+      border-radius: 6px;
+      background: white;
+      margin: 10px 0;
+    }
+
+    .csv-preview {
+      margin-top: 15px;
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .csv-preview h5 {
+      margin: 0 0 10px 0;
+      color: #4a5568;
+      font-size: 12px;
+    }
+
+    .csv-preview-table {
+      width: 100%;
+      font-size: 11px;
+      border-collapse: collapse;
+    }
+
+    .csv-preview-table th,
+    .csv-preview-table td {
+      padding: 4px 8px;
+      border: 1px solid #e2e8f0;
+      text-align: left;
+    }
+
+    .csv-preview-table th {
+      background: #f7fafc;
+      font-weight: 600;
+    }
+
+    .csv-import-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-info {
+      background: #3182ce;
+      border-color: #3182ce;
+      color: white;
+    }
+
+    .btn-info:hover {
+      background: #2c5aa0;
+      border-color: #2c5aa0;
+    }
+
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 12px;
+      min-width: auto;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      color: #2d3748;
+      font-size: 18px;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .modal-footer {
+      padding: 20px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .preset-options {
+      margin-top: 15px;
+      padding: 15px;
+      background: #f7fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
     }
   </style>
 </head>
@@ -332,7 +492,7 @@
     <!-- Posts Selection Panel -->
     <div class="posts-panel">
       <div class="panel-header">
-        📋 Content Library
+        <div class="panel-title">📋 Content Library</div>
         <div class="stats-bar">
           <span id="postsCount">0 posts</span>
           <span id="selectedCount">0 selected</span>
@@ -350,6 +510,28 @@
           <button class="btn btn-secondary" id="selectAllBtn">✅ Select All</button>
           <button class="btn btn-secondary" id="clearSelectionBtn">❌ Clear Selection</button>
           <button class="btn btn-warning" id="createAlbumBtn">📁 Create Album</button>
+          <button class="btn btn-info" id="csvImportBtn">📄 Import CSV</button>
+          <button class="btn btn-success" id="uploadPcBtn">📁 Upload from PC</button>
+        </div>
+
+        <!-- CSV Import Section (Hidden by default) -->
+        <div id="csvImportSection" class="csv-import-section" style="display: none;">
+          <div class="csv-import-header">
+            <h4>📄 CSV Import</h4>
+            <button class="btn btn-small" id="closeCsvImportBtn">✖</button>
+          </div>
+          <div class="csv-import-content">
+            <p>Import posts from CSV file. Expected format: <code>imageUrl,caption,title,category</code></p>
+            <input type="file" id="csvFileInput" accept=".csv" class="csv-file-input">
+            <div class="csv-preview" id="csvPreview" style="display: none;">
+              <h5>Preview (first 5 rows):</h5>
+              <div id="csvPreviewContent"></div>
+              <div class="csv-import-actions">
+                <button class="btn btn-success" id="confirmCsvImportBtn">✅ Import Posts</button>
+                <button class="btn btn-secondary" id="cancelCsvImportBtn">❌ Cancel</button>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div id="postsContainer" class="posts-grid">
@@ -427,11 +609,14 @@
 
         <div class="form-group">
           <label class="form-label">🎯 Quick Schedule Presets</label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('now')">⚡ Now</button>
-            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('1hour')">🕐 +1 Hour</button>
-            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('tomorrow')">🌅 Tomorrow 9AM</button>
-            <button type="button" class="btn btn-secondary" onclick="setQuickSchedule('weekend')">🎉 Weekend</button>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;" id="quickPresetButtons">
+            <button type="button" class="btn btn-secondary" data-preset="now">⚡ Now</button>
+            <button type="button" class="btn btn-secondary" data-preset="1hour">🕐 +1 Hour</button>
+            <button type="button" class="btn btn-secondary" data-preset="tomorrow">🌅 Tomorrow 9AM</button>
+            <button type="button" class="btn btn-secondary" data-preset="weekend">🎉 Weekend</button>
+          </div>
+          <div style="margin-top: 8px;">
+            <button type="button" class="btn btn-info btn-small" id="addCustomPresetBtn">➕ Add Custom Preset</button>
           </div>
         </div>
         
@@ -460,8 +645,90 @@
       <div class="schedule-actions">
         <button class="btn btn-success" id="scheduleBtn">🚀 Schedule Posts</button>
         <button class="btn btn-primary" id="publishNowBtn">⚡ Publish Now</button>
-        <button class="btn btn-secondary" id="viewQueueBtn">📋 View Queue</button>
         <button class="btn btn-warning" id="testApiBtn" style="background: #f59e0b; border-color: #f59e0b;">🧪 Test API</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Preset Dialog -->
+  <div id="customPresetDialog" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>➕ Create Custom Preset</h3>
+        <button class="btn btn-small" id="closeCustomPresetDialog">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Preset Name</label>
+          <input type="text" class="form-input" id="customPresetName" placeholder="e.g., Monday Morning, Lunch Break">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Preset Icon (optional)</label>
+          <input type="text" class="form-input" id="customPresetIcon" placeholder="e.g., 🌅, ⏰, 🎯" maxlength="2">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Schedule Type</label>
+          <select class="form-input" id="customPresetType">
+            <option value="relative">Relative Time (from now)</option>
+            <option value="absolute">Absolute Time (specific time)</option>
+            <option value="next_day">Next Occurrence (specific day/time)</option>
+          </select>
+        </div>
+
+        <!-- Relative Time Options -->
+        <div id="relativeTimeOptions" class="preset-options">
+          <div class="form-group">
+            <label class="form-label">Time from Now</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" class="form-input" id="relativeAmount" min="1" value="30" style="width: 80px;">
+              <select class="form-input" id="relativeUnit" style="width: 120px;">
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Absolute Time Options -->
+        <div id="absoluteTimeOptions" class="preset-options" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Time</label>
+            <input type="time" class="form-input" id="absoluteTime" value="09:00">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date Offset</label>
+            <select class="form-input" id="absoluteDateOffset">
+              <option value="0">Today</option>
+              <option value="1">Tomorrow</option>
+              <option value="2">Day After Tomorrow</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Next Day Options -->
+        <div id="nextDayOptions" class="preset-options" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Day of Week</label>
+            <select class="form-input" id="nextDayWeekday">
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+              <option value="0">Sunday</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Time</label>
+            <input type="time" class="form-input" id="nextDayTime" value="09:00">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" id="saveCustomPresetBtn">✅ Save Preset</button>
+        <button class="btn btn-secondary" id="cancelCustomPresetBtn">❌ Cancel</button>
       </div>
     </div>
   </div>

@@ -278,18 +278,36 @@
 
 
   <div class="section">
+    <h2>⚡ Quick Capture Features</h2>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="enableCtrlClick" style="width: auto; margin-right: 8px;">
+        Enable Ctrl+Click Quick Save
+      </label>
+      <div class="help-text">
+        When enabled, Ctrl+click on images will automatically save them using the last selected category.
+        Right-click to change category as usual.
+      </div>
+    </div>
+
+    <button id="saveQuickCaptureBtn" class="success">💾 Save Quick Capture Settings</button>
+    <div id="quickCaptureMessage" class="status-message"></div>
+  </div>
+
+  <div class="section">
     <h2>📊 Data Management</h2>
-    
+
     <div class="form-group">
       <button id="exportDataBtn" class="warning">📤 Export All Data</button>
       <button id="clearDataBtn" class="danger">🗑️ Clear All Data</button>
     </div>
-    
+
     <div class="help-text">
       Export: Download all captured content as CSV<br>
       Clear: Remove all saved content and reset extension
     </div>
-    
+
     <div id="dataMessage" class="status-message"></div>
   </div>
 
