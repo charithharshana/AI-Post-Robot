@@ -955,6 +955,59 @@ class RoboPostAPI {
   }
 
   /**
+   * Create a test image for API testing
+   */
+  async createTestImage() {
+    try {
+      // Create a simple test image using canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+
+      // Create a gradient background
+      const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+      gradient.addColorStop(0, '#4F46E5');
+      gradient.addColorStop(1, '#7C3AED');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 400, 400);
+
+      // Add test text
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🧪 API TEST', 200, 180);
+
+      ctx.font = '20px Arial';
+      ctx.fillText('AI Post Robot', 200, 220);
+      ctx.fillText('Extension Test', 200, 250);
+
+      // Add timestamp
+      ctx.font = '14px Arial';
+      ctx.fillText(new Date().toLocaleString(), 200, 300);
+
+      // Convert canvas to blob
+      const blob = await new Promise(resolve => {
+        canvas.toBlob(resolve, 'image/png', 0.9);
+      });
+
+      // Create file object
+      const testFile = new File([blob], 'api-test-image.png', {
+        type: 'image/png',
+        lastModified: Date.now()
+      });
+
+      // Upload the test image
+      const storageId = await this.uploadMedia(testFile);
+      return storageId;
+
+    } catch (error) {
+      console.error('❌ Failed to create test image:', error);
+      throw new Error(`Test image creation failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Test function to debug API scheduling issues
    * Call this from console: window.roboPostAPI.testScheduling()
    */
@@ -986,24 +1039,25 @@ class RoboPostAPI {
       const testChannelId = channels[0].id;
       console.log('🎯 Using test channel:', channels[0].name, '(', testChannelId, ')');
 
-      // Use an existing uploaded image storage ID instead of uploading new one
-      // This matches what happens in the real scenario where images upload but scheduling fails
-      const testStorageId = 'df6d61f0-146a-4ee9-8b1e-8632db029f66'; // From your error message
-      console.log('🖼️ Using existing storage_id:', testStorageId);
+      // Create a proper test image instead of using hardcoded storage ID
+      console.log('🖼️ Creating test image...');
+      const testStorageId = await this.createTestImage();
+      console.log('✅ Test image uploaded, storage_id:', testStorageId);
 
-      // Create test payload exactly like Python
+      // Create test payload as DRAFT to prevent publishing to real social media
       const scheduleTime = new Date(Date.now() + 5 * 60000).toISOString(); // 5 minutes from now
       const payload = {
-        text: '🧪 Test post from AI Post Robot extension - API debugging test',
+        text: '🧪 Test post from AI Post Robot extension - API debugging test (DRAFT MODE)',
         channel_ids: [testChannelId],
         schedule_at: scheduleTime,
-        image_object_ids: [testStorageId]
+        image_object_ids: [testStorageId],
+        is_draft: true // This prevents the post from being published to real social media
       };
 
       console.log('📋 Test payload:', JSON.stringify(payload, null, 2));
 
-      // Test the exact createScheduledPost call that's failing
-      console.log('📅 Testing createScheduledPost directly...');
+      // Test the exact createScheduledPost call (as DRAFT)
+      console.log('📅 Testing createScheduledPost in DRAFT mode (will not publish to social media)...');
 
       // First test with background script (extension context)
       if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -1038,7 +1092,7 @@ class RoboPostAPI {
               console.log('✅ Background script success:', response.data);
               resolve({
                 success: true,
-                message: 'Test completed successfully via background script!',
+                message: 'Test completed successfully via background script! (Draft mode - not published to social media)',
                 result: response.data
               });
             } else {
@@ -1059,7 +1113,7 @@ class RoboPostAPI {
 
         return {
           success: true,
-          message: 'Test completed successfully via direct fetch!',
+          message: 'Test completed successfully via direct fetch! (Draft mode - not published to social media)',
           result: result
         };
       }

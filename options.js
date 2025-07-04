@@ -2,6 +2,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   loadSettings();
   setupEventListeners();
+  initializeGeminiUI();
 });
 
 function setupEventListeners() {
@@ -9,6 +10,13 @@ function setupEventListeners() {
   document.getElementById('testApiBtn').addEventListener('click', testApiConnection);
   document.getElementById('diagnosticsBtn').addEventListener('click', runDiagnostics);
   document.getElementById('saveApiBtn').addEventListener('click', saveApiKey);
+
+  // Gemini API Configuration
+  document.getElementById('saveGeminiBtn').addEventListener('click', saveGeminiSettings);
+  document.getElementById('addModelBtn').addEventListener('click', addCustomModel);
+  document.getElementById('removeModelBtn').addEventListener('click', removeCustomModel);
+  document.getElementById('setFavoriteBtn').addEventListener('click', setFavoriteModel);
+  document.getElementById('toggleApiKeysBtn').addEventListener('click', toggleApiKeysVisibility);
 
   // Scheduling Settings
   document.getElementById('saveSchedulingBtn').addEventListener('click', saveSchedulingSettings);
@@ -24,6 +32,9 @@ function setupEventListeners() {
 function loadSettings() {
   chrome.storage.local.get([
     'robopostApiKey',
+    'geminiApiKeys',
+    'geminiModel',
+    'geminiImageModel',
     'defaultDelay',
     'defaultChannels',
     'defaultTimezone',
@@ -36,6 +47,14 @@ function loadSettings() {
       updateApiStatus(true);
       loadChannelsList(result.channelsData, result.defaultChannels);
     }
+
+    // Gemini API Settings
+    if (result.geminiApiKeys) {
+      document.getElementById('geminiApiKeys').value = result.geminiApiKeys;
+      updateGeminiApiStatus(true);
+    }
+    document.getElementById('geminiModel').value = result.geminiModel || 'gemini-2.5-flash-lite-preview-06-17';
+    document.getElementById('geminiImageModel').value = result.geminiImageModel || 'gemini-2.0-flash-preview-image-generation';
 
     // Scheduling Settings
     document.getElementById('defaultDelay').value = result.defaultDelay || 10;
@@ -330,6 +349,229 @@ function showButtonMessage(buttonId, message, originalText) {
   setTimeout(() => {
     button.textContent = originalButtonText;
   }, 3000);
+}
+
+// Gemini API Functions
+function initializeGeminiUI() {
+  // Hide API keys by default for security
+  const textarea = document.getElementById('geminiApiKeys');
+  const button = document.getElementById('toggleApiKeysBtn');
+
+  textarea.classList.add('hidden-keys');
+  button.textContent = '👁️';
+  button.title = 'Show API Keys';
+
+  // Auto-refresh models on load
+  refreshGeminiModels();
+}
+
+function toggleApiKeysVisibility() {
+  const textarea = document.getElementById('geminiApiKeys');
+  const button = document.getElementById('toggleApiKeysBtn');
+
+  if (textarea.classList.contains('hidden-keys')) {
+    textarea.classList.remove('hidden-keys');
+    button.textContent = '🙈';
+    button.title = 'Hide API Keys';
+  } else {
+    textarea.classList.add('hidden-keys');
+    button.textContent = '👁️';
+    button.title = 'Show API Keys';
+  }
+}
+
+
+
+async function refreshGeminiModels() {
+  try {
+    // Load custom models from storage
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['customGeminiModels', 'favoriteGeminiModel'], resolve);
+    });
+
+    // Default models (excluding image generation models)
+    let models = [
+      { value: 'gemini-2.5-pro', name: 'gemini-2.5-pro' },
+      { value: 'gemini-2.5-flash', name: 'gemini-2.5-flash' },
+      { value: 'gemini-2.5-flash-preview-04-17', name: 'gemini-2.5-flash-preview-04-17' },
+      { value: 'gemini-2.5-flash-lite-preview-06-17', name: 'gemini-2.5-flash-lite-preview-06-17' }
+    ];
+
+    // Filter out image generation models that shouldn't be in text generation list
+    const imageModelsToExclude = [
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-001',
+      'gemini-2.0-flash-preview-image-generation'
+    ];
+
+    // Add custom models if any (excluding image generation models)
+    if (result.customGeminiModels) {
+      const customModels = result.customGeminiModels
+        .filter(modelId => !imageModelsToExclude.includes(modelId))
+        .map(modelId => ({
+          value: modelId,
+          name: modelId,
+          custom: true
+        }));
+      models = [...models, ...customModels];
+    }
+
+    // Mark favorite model
+    const favoriteModel = result.favoriteGeminiModel || 'gemini-2.5-flash-lite-preview-06-17';
+    models = models.map(model => ({
+      ...model,
+      name: model.value === favoriteModel ? `⭐ ${model.name} (Favorite)` : model.name,
+      favorite: model.value === favoriteModel
+    }));
+
+    const modelSelect = document.getElementById('geminiModel');
+    const currentValue = modelSelect.value;
+
+    modelSelect.innerHTML = '';
+    models.forEach(model => {
+      const option = document.createElement('option');
+      option.value = model.value;
+      option.textContent = model.name;
+      if (model.favorite) option.selected = true;
+      modelSelect.appendChild(option);
+    });
+
+    // Restore previous selection if it exists
+    if (currentValue && modelSelect.querySelector(`option[value="${currentValue}"]`)) {
+      modelSelect.value = currentValue;
+    }
+
+    console.log(`Models refreshed: ${models.length} models available`);
+  } catch (error) {
+    console.error('Error refreshing models:', error);
+  }
+}
+
+function saveGeminiSettings() {
+  const apiKeys = document.getElementById('geminiApiKeys').value.trim();
+  const model = document.getElementById('geminiModel').value;
+  const imageModel = document.getElementById('geminiImageModel').value;
+
+  if (!apiKeys) {
+    showMessage('geminiMessage', '❌ Please enter at least one API key before saving', 'error');
+    return;
+  }
+
+  chrome.storage.local.set({
+    geminiApiKeys: apiKeys,
+    geminiModel: model,
+    geminiImageModel: imageModel,
+    favoriteGeminiModel: model // Save current selection as favorite
+  }, () => {
+    showMessage('geminiMessage', '✅ Settings saved successfully! Gemini AI is now ready to use in the Advanced Scheduler.', 'success');
+
+    // Update API status
+    updateGeminiApiStatus(true);
+
+    // Refresh models to update favorite marking
+    refreshGeminiModels();
+  });
+}
+
+// Model Management Functions
+function addCustomModel() {
+  const modelId = prompt('Enter the Gemini model ID:');
+  if (!modelId || !modelId.trim()) return;
+
+  const trimmedModelId = modelId.trim();
+
+  chrome.storage.local.get(['customGeminiModels'], (result) => {
+    const customModels = result.customGeminiModels || [];
+
+    if (customModels.includes(trimmedModelId)) {
+      showMessage('geminiMessage', '❌ Model already exists', 'error');
+      return;
+    }
+
+    customModels.push(trimmedModelId);
+
+    chrome.storage.local.set({ customGeminiModels: customModels }, () => {
+      showMessage('geminiMessage', `✅ Model "${trimmedModelId}" added successfully`, 'success');
+      refreshGeminiModels();
+    });
+  });
+}
+
+function removeCustomModel() {
+  const modelSelect = document.getElementById('geminiModel');
+  const selectedModel = modelSelect.value;
+
+  if (!selectedModel) {
+    showMessage('geminiMessage', '❌ Please select a model to remove', 'error');
+    return;
+  }
+
+  // Don't allow removing default models or image generation models
+  const protectedModels = [
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-preview-04-17',
+    'gemini-2.5-flash-lite-preview-06-17',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-001',
+    'gemini-2.0-flash-preview-image-generation'
+  ];
+
+  if (defaultModels.includes(selectedModel)) {
+    showMessage('geminiMessage', '❌ Cannot remove default models', 'error');
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to remove the model "${selectedModel}"?`)) {
+    return;
+  }
+
+  chrome.storage.local.get(['customGeminiModels'], (result) => {
+    const customModels = result.customGeminiModels || [];
+    const updatedModels = customModels.filter(model => model !== selectedModel);
+
+    chrome.storage.local.set({ customGeminiModels: updatedModels }, () => {
+      showMessage('geminiMessage', `✅ Model "${selectedModel}" removed successfully`, 'success');
+      refreshGeminiModels();
+    });
+  });
+}
+
+function setFavoriteModel() {
+  const modelSelect = document.getElementById('geminiModel');
+  const selectedModel = modelSelect.value;
+
+  if (!selectedModel) {
+    showMessage('geminiMessage', '❌ Please select a model to set as favorite', 'error');
+    return;
+  }
+
+  chrome.storage.local.set({ favoriteGeminiModel: selectedModel }, () => {
+    showMessage('geminiMessage', `✅ "${selectedModel}" set as favorite model`, 'success');
+    refreshGeminiModels();
+  });
+}
+
+function updateGeminiApiStatus(connected) {
+  const statusEl = document.getElementById('geminiApiStatus');
+  if (connected) {
+    statusEl.className = 'api-status api-connected';
+    statusEl.textContent = '✅ Gemini AI Connected';
+  } else {
+    statusEl.className = 'api-status api-disconnected';
+    statusEl.textContent = '❌ Gemini AI Not Connected';
+  }
+}
+
+function showMessage(elementId, message, type) {
+  const messageEl = document.getElementById(elementId);
+  messageEl.textContent = message;
+  messageEl.className = `status-message status-${type}`;
+  messageEl.style.display = 'block';
+
+  setTimeout(() => {
+    messageEl.style.display = 'none';
+  }, 5000);
 }
 
 // Add settings button functionality to popup

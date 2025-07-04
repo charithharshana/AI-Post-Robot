@@ -13,16 +13,21 @@ async function initializeAdvancedScheduler() {
   try {
     // Initialize RoboPost API
     await window.roboPostAPI.initialize();
-    
+
+    // Initialize Gemini API
+    if (window.geminiAPI) {
+      await window.geminiAPI.initialize();
+    }
+
     // Load saved data
     await loadSavedData();
-    
+
     // Load channels
     await loadChannels();
-    
+
     // Setup event listeners
     setupEventListeners();
-    
+
     // Load default settings
     await loadDefaultSettings();
 
@@ -441,6 +446,7 @@ function setupEventListeners() {
   document.getElementById('selectAllBtn').addEventListener('click', selectAllPosts);
   document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
   document.getElementById('createAlbumBtn').addEventListener('click', createAlbum);
+  document.getElementById('deletePostsBtn').addEventListener('click', deleteSelectedPosts);
 
   // CSV Import buttons
   document.getElementById('csvImportBtn').addEventListener('click', showCsvImport);
@@ -483,6 +489,31 @@ function setupEventListeners() {
 
   // Custom preset management
   document.getElementById('addCustomPresetBtn').addEventListener('click', showCustomPresetDialog);
+
+  // AI Rewrite buttons
+  setupRewriteButtonListeners();
+}
+
+function setupRewriteButtonListeners() {
+  // Add event listeners for all rewrite buttons
+  document.querySelectorAll('.btn-ai').forEach(button => {
+    button.addEventListener('click', handleRewriteClick);
+  });
+
+  // Add event listeners for edit prompt buttons
+  document.querySelectorAll('.edit-prompt-btn').forEach(button => {
+    button.addEventListener('click', handleRewriteClick);
+  });
+
+  // Custom prompt dialog listeners
+  document.getElementById('closeCustomPromptDialog').addEventListener('click', hideCustomPromptDialog);
+  document.getElementById('cancelCustomPromptBtn').addEventListener('click', hideCustomPromptDialog);
+  document.getElementById('applyCustomPromptBtn').addEventListener('click', applyCustomPrompt);
+
+  // Edit prompt dialog listeners
+  document.getElementById('closeEditPromptDialog').addEventListener('click', hideEditPromptDialog);
+  document.getElementById('cancelEditPromptBtn').addEventListener('click', hideEditPromptDialog);
+  document.getElementById('saveEditPromptBtn').addEventListener('click', saveEditedPrompt);
 }
 
 function updateCaptionCharCount() {
@@ -539,6 +570,90 @@ function clearSelection() {
   });
   updateSelectedPostsInfo();
   updateStats();
+}
+
+async function deleteSelectedPosts() {
+  if (selectedPosts.size === 0) {
+    showMessage('❌ No posts selected for deletion', 'error');
+    return;
+  }
+
+  // Confirm deletion
+  const confirmMessage = `Are you sure you want to delete ${selectedPosts.size} selected post(s)? This action cannot be undone.`;
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  try {
+    // Get current saved items and counters
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['savedItems', 'counters'], resolve);
+    });
+
+    const savedItems = result.savedItems || {};
+    const counters = result.counters || { captionCount: 0, linkCount: 0 };
+    let deletedCount = 0;
+
+    // Track posts to delete for counter updates
+    const postsToDelete = [];
+
+    // Collect posts to delete
+    selectedPosts.forEach(postId => {
+      const [category, index] = postId.split('_');
+      const indexNum = parseInt(index);
+
+      if (savedItems[category] && savedItems[category][indexNum]) {
+        postsToDelete.push(savedItems[category][indexNum]);
+        // Mark for deletion (we'll filter these out)
+        savedItems[category][indexNum] = null;
+        deletedCount++;
+      }
+    });
+
+    // Update counters by subtracting deleted posts
+    postsToDelete.forEach(post => {
+      if (post.caption && post.caption.trim()) {
+        counters.captionCount = Math.max(0, counters.captionCount - 1);
+      }
+      if (post.imageUrl) {
+        counters.linkCount = Math.max(0, counters.linkCount - 1);
+      }
+    });
+
+    // Remove null entries and reindex
+    Object.keys(savedItems).forEach(category => {
+      savedItems[category] = savedItems[category].filter(post => post !== null);
+
+      // Remove empty categories
+      if (savedItems[category].length === 0) {
+        delete savedItems[category];
+      }
+    });
+
+    // Update categories list
+    const categories = Object.keys(savedItems);
+
+    // Save updated items, categories, and counters
+    await new Promise(resolve => {
+      chrome.storage.local.set({ savedItems, categories, counters }, resolve);
+    });
+
+    // Update extension badge
+    const totalCount = Object.values(savedItems).reduce((sum, posts) => sum + posts.length, 0);
+    chrome.action.setBadgeText({ text: totalCount.toString() });
+    chrome.action.setBadgeBackgroundColor({ color: "#000000" });
+    chrome.action.setBadgeTextColor({ color: "#FFFFFF" });
+
+    // Clear selection and reload
+    clearSelection();
+    await loadSavedData();
+
+    showMessage(`✅ Successfully deleted ${deletedCount} post(s)`, 'success');
+
+  } catch (error) {
+    console.error('Delete posts error:', error);
+    showMessage(`❌ Failed to delete posts: ${error.message}`, 'error');
+  }
 }
 
 function createAlbum() {
@@ -927,7 +1042,7 @@ async function testRoboPostAPI() {
     const result = await window.roboPostAPI.testScheduling();
 
     if (result.success) {
-      showMessage('✅ API test successful! Check console for details.', 'success');
+      showMessage('✅ API test successful! Draft post created (not published to social media). Check console for details.', 'success');
       console.log('🎉 API Test Result:', result);
     } else {
       showMessage(`❌ API test failed: ${result.error}`, 'error');
@@ -1448,10 +1563,278 @@ async function confirmCsvImport() {
   }
 }
 
+// AI Rewrite Functionality
+async function handleRewriteClick(event) {
+  const button = event.target;
+
+  // Check if this is an edit button
+  if (button.classList.contains('edit-prompt-btn')) {
+    const target = button.dataset.target;
+    const promptType = button.dataset.prompt;
+    showEditPromptDialog(target, promptType);
+    return;
+  }
+
+  const target = button.dataset.target; // 'title' or 'caption'
+  const promptType = button.dataset.prompt; // 'engaging', 'shorten', etc.
+
+  if (promptType === 'custom') {
+    showCustomPromptDialog(target);
+    return;
+  }
+
+  // Get the current text
+  const textElement = target === 'title'
+    ? document.getElementById('postTitle')
+    : document.getElementById('postCaption');
+
+  const currentText = textElement.value.trim();
+
+  if (!currentText) {
+    showMessage(`❌ Please enter some ${target} text first`, 'error');
+    return;
+  }
+
+  // Check if Gemini API is available
+  if (!window.geminiAPI) {
+    showMessage('❌ Gemini AI not available. Please check your settings.', 'error');
+    return;
+  }
+
+  // Find the matching prompt
+  const promptData = window.geminiRewritePrompts[target]?.find(p =>
+    p.name.toLowerCase() === promptType.toLowerCase()
+  );
+
+  if (!promptData) {
+    showMessage('❌ Prompt not found', 'error');
+    return;
+  }
+
+  // Show loading state
+  const originalText = button.textContent;
+  button.textContent = '🔄';
+  button.disabled = true;
+  button.classList.add('loading');
+
+  try {
+    // Call Gemini API to rewrite the text
+    const rewrittenText = await window.geminiAPI.rewriteText(currentText, promptData.prompt);
+
+    // Update the text field
+    textElement.value = rewrittenText.trim();
+
+    // Update character count if it's the caption
+    if (target === 'caption') {
+      updateCaptionCharCount();
+    }
+
+    // Show success feedback
+    textElement.style.background = '#e6fffa';
+    setTimeout(() => {
+      textElement.style.background = '';
+    }, 2000);
+
+    showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten successfully!`, 'success');
+
+  } catch (error) {
+    console.error('Rewrite error:', error);
+    showMessage(`❌ Rewrite failed: ${error.message}`, 'error');
+  } finally {
+    // Reset button state
+    button.textContent = originalText;
+    button.disabled = false;
+    button.classList.remove('loading');
+  }
+}
+
+function showCustomPromptDialog(target) {
+  const dialog = document.getElementById('customPromptDialog');
+  const targetSelect = document.getElementById('customPromptTarget');
+
+  // Set the target
+  targetSelect.value = target;
+
+  // Clear previous input
+  document.getElementById('customPromptText').value = '';
+
+  // Show dialog
+  dialog.style.display = 'flex';
+}
+
+function hideCustomPromptDialog() {
+  const dialog = document.getElementById('customPromptDialog');
+  dialog.style.display = 'none';
+}
+
+function showEditPromptDialog(target, promptType) {
+  const dialog = document.getElementById('editPromptDialog');
+  const targetSelect = document.getElementById('editPromptTarget');
+  const promptTextarea = document.getElementById('editPromptText');
+  const promptNameInput = document.getElementById('editPromptName');
+
+  // Find the current prompt
+  const promptData = window.geminiRewritePrompts[target]?.find(p =>
+    p.name.toLowerCase() === promptType.toLowerCase()
+  );
+
+  if (!promptData) {
+    showMessage('❌ Prompt not found', 'error');
+    return;
+  }
+
+  // Set the values
+  targetSelect.value = target;
+  promptTextarea.value = promptData.prompt;
+  promptNameInput.value = promptData.name;
+
+  // Store the original prompt type for updating
+  dialog.dataset.originalPromptType = promptType;
+  dialog.dataset.target = target;
+
+  // Show dialog
+  dialog.style.display = 'flex';
+}
+
+function hideEditPromptDialog() {
+  const dialog = document.getElementById('editPromptDialog');
+  dialog.style.display = 'none';
+}
+
+async function saveEditedPrompt() {
+  const dialog = document.getElementById('editPromptDialog');
+  const target = dialog.dataset.target;
+  const originalPromptType = dialog.dataset.originalPromptType;
+  const newPrompt = document.getElementById('editPromptText').value.trim();
+  const newName = document.getElementById('editPromptName').value.trim();
+
+  if (!newPrompt || !newName) {
+    showMessage('❌ Please enter both prompt name and text', 'error');
+    return;
+  }
+
+  // Find and update the prompt
+  const promptIndex = window.geminiRewritePrompts[target]?.findIndex(p =>
+    p.name.toLowerCase() === originalPromptType.toLowerCase()
+  );
+
+  if (promptIndex !== -1) {
+    window.geminiRewritePrompts[target][promptIndex].prompt = newPrompt;
+    window.geminiRewritePrompts[target][promptIndex].name = newName;
+    window.geminiRewritePrompts[target][promptIndex].modified = true;
+
+    // Save to storage
+    const customPrompts = {
+      title: window.geminiRewritePrompts.title.filter(p => p.custom || p.modified),
+      caption: window.geminiRewritePrompts.caption.filter(p => p.custom || p.modified)
+    };
+
+    window.saveCustomPrompts(customPrompts);
+
+    showMessage(`✅ Prompt "${newName}" updated successfully!`, 'success');
+
+    // Update the button text if name changed
+    updatePromptButtons();
+
+    hideEditPromptDialog();
+  } else {
+    showMessage('❌ Failed to update prompt', 'error');
+  }
+}
+
+function updatePromptButtons() {
+  // Update title buttons
+  const titleButtons = document.querySelectorAll('#titleRewriteButtons .btn-ai:not([data-prompt="custom"])');
+  titleButtons.forEach((button, index) => {
+    if (window.geminiRewritePrompts.title[index]) {
+      const prompt = window.geminiRewritePrompts.title[index];
+      button.textContent = `${prompt.icon} ${prompt.name}`;
+    }
+  });
+
+  // Update caption buttons
+  const captionButtons = document.querySelectorAll('#captionRewriteButtons .btn-ai:not([data-prompt="custom"])');
+  captionButtons.forEach((button, index) => {
+    if (window.geminiRewritePrompts.caption[index]) {
+      const prompt = window.geminiRewritePrompts.caption[index];
+      button.textContent = `${prompt.icon} ${prompt.name}`;
+    }
+  });
+}
+
+async function applyCustomPrompt() {
+  const promptText = document.getElementById('customPromptText').value.trim();
+  const target = document.getElementById('customPromptTarget').value;
+
+  if (!promptText) {
+    showMessage('❌ Please enter a custom prompt', 'error');
+    return;
+  }
+
+  // Get the current text
+  const textElement = target === 'title'
+    ? document.getElementById('postTitle')
+    : document.getElementById('postCaption');
+
+  const currentText = textElement.value.trim();
+
+  if (!currentText) {
+    showMessage(`❌ Please enter some ${target} text first`, 'error');
+    return;
+  }
+
+  // Check if Gemini API is available
+  if (!window.geminiAPI) {
+    showMessage('❌ Gemini AI not available. Please check your settings.', 'error');
+    return;
+  }
+
+  const button = document.getElementById('applyCustomPromptBtn');
+  const originalText = button.textContent;
+  button.textContent = '🔄 Processing...';
+  button.disabled = true;
+
+  try {
+    // Call Gemini API to rewrite the text
+    const rewrittenText = await window.geminiAPI.rewriteText(currentText, promptText);
+
+    // Update the text field
+    textElement.value = rewrittenText.trim();
+
+    // Update character count if it's the caption
+    if (target === 'caption') {
+      updateCaptionCharCount();
+    }
+
+    // Show success feedback
+    textElement.style.background = '#e6fffa';
+    setTimeout(() => {
+      textElement.style.background = '';
+    }, 2000);
+
+    showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten successfully!`, 'success');
+
+    // Hide dialog
+    hideCustomPromptDialog();
+
+  } catch (error) {
+    console.error('Custom rewrite error:', error);
+    showMessage(`❌ Rewrite failed: ${error.message}`, 'error');
+  } finally {
+    // Reset button state
+    button.textContent = originalText;
+    button.disabled = false;
+  }
+}
+
 // Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Load custom prompts first
+  await window.loadCustomPrompts();
+
   loadCapturedPosts();
   setupEventListeners();
+  setupRewriteButtonListeners();
   updateCaptionCharCount();
   updateTimezoneInfo();
 });

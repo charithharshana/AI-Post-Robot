@@ -16,14 +16,15 @@
     "*://*.pinterest.com/*",
     "https://public-api.robopost.app/*",
     "http://public-api.robopost.app/*",
-    "https://httpbin.org/*"
+    "https://httpbin.org/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "web_accessible_resources": [
     {
-      "resources": ["robopost-api.js"],
+      "resources": ["robopost-api.js", "gemini-api.js"],
       "matches": ["<all_urls>"]
     }
   ],
