@@ -37,7 +37,6 @@ async function initializeSchedulePage() {
 }
 
 function setupEventListeners() {
-  document.getElementById('testApiBtn').addEventListener('click', testRoboPostAPI);
   document.getElementById('previewBtn').addEventListener('click', previewSchedule);
   document.getElementById('scheduleBtn').addEventListener('click', startScheduling);
   document.getElementById('cancelBtn').addEventListener('click', () => window.close());
@@ -311,15 +310,27 @@ function showSection(sectionId) {
 
 function showMessage(containerId, message, type) {
   const container = document.getElementById(containerId);
+  if (!container) {
+    console.error('❌ Message container not found:', containerId);
+    return;
+  }
+
+  // Clear existing messages in the container
+  container.innerHTML = '';
+
   const messageEl = document.createElement('div');
   messageEl.className = `status-message status-${type}`;
   messageEl.textContent = message;
   messageEl.style.display = 'block';
-  
+
   container.appendChild(messageEl);
-  
+
+  console.log(`📢 Message displayed: ${message} (type: ${type})`);
+
   setTimeout(() => {
-    messageEl.remove();
+    if (messageEl && messageEl.parentNode) {
+      messageEl.remove();
+    }
   }, 5000);
 }
 
@@ -333,97 +344,40 @@ function resetToConfig() {
   showSection('configSection');
 }
 
-// Test RoboPost API functionality with comprehensive debugging
-async function testRoboPostAPI() {
-  try {
-    showMessage('configMessage', '🧪 Testing RoboPost API with comprehensive debugging...', 'info');
+// Helper function to manage button loading states (kept for other buttons)
+function setButtonLoading(buttonId, isLoading, originalText = null) {
+  const button = document.getElementById(buttonId);
+  if (!button) return;
 
-    // Ensure RoboPost API is available
-    if (!window.roboPostAPI) {
-      throw new Error('RoboPost API not loaded. Please refresh the page.');
+  if (isLoading) {
+    // Store original text if not provided
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent;
     }
 
-    // Ensure API is initialized
-    const isInitialized = await window.roboPostAPI.initialize();
-    if (!isInitialized) {
-      throw new Error('RoboPost API key not configured. Please go to Settings and configure your API key.');
-    }
+    // Set loading state
+    button.disabled = true;
+    button.style.opacity = '0.7';
+    button.style.cursor = 'not-allowed';
 
-    // Get channel IDs from form
-    const channelIds = getChannelIds();
-    if (channelIds.length === 0) {
-      throw new Error('Please enter at least one channel ID first');
-    }
-
-    console.log('🧪 Starting comprehensive API test...');
-    console.log('🔑 API Key:', window.roboPostAPI.apiKey ? `${window.roboPostAPI.apiKey.substring(0, 8)}...` : 'Not set');
-    console.log('📺 Channel IDs:', channelIds);
-
-    // Test 1: API Connection
-    console.log('\n📡 Test 1: API Connection...');
-    try {
-      await window.roboPostAPI.testConnection();
-      console.log('✅ API connection successful');
-      showMessage('configMessage', '✅ Step 1: API connection successful', 'success');
-    } catch (connectionError) {
-      console.error('❌ API connection failed:', connectionError);
-      throw new Error(`API connection failed: ${connectionError.message}`);
-    }
-
-    // Test 2: Direct scheduling test with existing storage ID
-    console.log('\n📅 Test 2: Direct scheduling test...');
-    showMessage('configMessage', '🔄 Step 2: Testing direct scheduling...', 'info');
-
-    const testStorageId = 'df6d61f0-146a-4ee9-8b1e-8632db029f66'; // From your error
-
-    const directPayload = {
-      text: '🧪 Direct test post from Schedule Posts interface',
-      channel_ids: channelIds,
-      schedule_at: new Date(Date.now() + 5 * 60000).toISOString(),
-      image_object_ids: [testStorageId]
+    // Add loading spinner and text based on button type
+    const loadingTexts = {
+      'scheduleBtn': '🔄 Scheduling...',
+      'previewBtn': '🔄 Loading Preview...'
     };
 
-    console.log('📋 Direct payload:', JSON.stringify(directPayload, null, 2));
+    button.textContent = loadingTexts[buttonId] || '🔄 Loading...';
+  } else {
+    // Reset button state
+    button.disabled = false;
+    button.style.opacity = '';
+    button.style.cursor = '';
+    button.textContent = originalText || button.dataset.originalText || button.textContent;
 
-    try {
-      const directResult = await window.roboPostAPI.createScheduledPost(directPayload);
-      console.log('✅ Direct scheduling successful:', directResult);
-
-      if (directResult.scheduled_posts && directResult.scheduled_posts[0]) {
-        showMessage('configMessage', `✅ SUCCESS! Direct test passed! Post ID: ${directResult.scheduled_posts[0].id}`, 'success');
-        return; // Success, no need to continue
-      } else {
-        throw new Error('Invalid response format from direct scheduling');
-      }
-    } catch (directError) {
-      console.error('❌ Direct scheduling failed:', directError);
-      showMessage('configMessage', `❌ Step 2 failed: ${directError.message}`, 'error');
-
-      // Continue to test 3 to see if it's a payload issue
+    // Clean up stored original text
+    if (button.dataset.originalText) {
+      delete button.dataset.originalText;
     }
-
-    // Test 3: Full flow test (upload + schedule)
-    console.log('\n🔄 Test 3: Full flow test (upload + schedule)...');
-    showMessage('configMessage', '🔄 Step 3: Testing full flow...', 'info');
-
-    const testData = {
-      imageUrl: 'https://scontent-sin6-1.xx.fbcdn.net/v/t39.30808-6/514718061_1177501651084210_5672228014284257460_n.jpg?_nc_cat=1&ccb=1-7&_nc_sid=127cfc&_nc_ohc=_8fVSDUB77YQ7kNvwHDHb0d&_nc_oc=Adn1Sh98GWW39aXckFVQkhrMcwQdBAQf1ZYF6BdirVlQAsQrEcKtsFm8eHgAcnhdIRA&_nc_zt=23&_nc_ht=scontent-sin6-1.xx&_nc_gid=vaecvlTdRAktfFlL80kabA&oh=00_AfNip3FyoAQbPLQZSIwyoM-iwfrlkxKjdluergKWzY87mw&oe=686988C8',
-      caption: 'ශ්‍රීලංකන් ගුවන් සේවා සමාගමේ හිටපු සභාපති නිශාන්ත වික්‍රමසිංහ ලබන 15 වැනිදා දක්වා යළි රිමාන්ඩ්.',
-      channelIds: channelIds,
-      scheduleAt: new Date(Date.now() + 5 * 60000).toISOString(),
-      title: 'Test Post from Extension'
-    };
-
-    console.log('🧪 Testing full flow with real Facebook data:', testData);
-
-    const result = await window.roboPostAPI.schedulePostFromCapture(testData);
-
-    showMessage('configMessage', `✅ Full flow SUCCESS! Post scheduled with ID: ${result.postId}`, 'success');
-    console.log('🎉 Full flow test result:', result);
-
-  } catch (error) {
-    console.error('❌ Test failed:', error);
-    showMessage('configMessage', `❌ Test failed: ${error.message}`, 'error');
   }
 }
 

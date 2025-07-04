@@ -5,7 +5,7 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 ## Features
 
 ### 🎯 Smart Content Capture
-- **Auto-detection**: Automatically captures captions from Facebook, Pinterest, Instagram, Threads, and Reddit
+- **Auto-detection**: Automatically captures captions from Facebook and Pinterest
 - **Manual selection**: Select any text to use as caption
 - **Image capture**: Right-click on images to save with associated captions
 - **Smart processing**: Automatic caption cleaning and length optimization
@@ -13,7 +13,7 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 ### 🚀 Bulk Scheduling
 - **RoboPost Integration**: Direct integration with RoboPost API for automated posting
 - **Bulk operations**: Schedule multiple posts with customizable intervals
-- **Multi-platform**: Support for Facebook, Instagram, Pinterest, YouTube, and more
+- **Multi-platform**: Support for Facebook and Pinterest
 - **Smart scheduling**: Configurable delays and posting intervals
 
 ### 📊 Content Management
@@ -61,9 +61,6 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 
 - **Facebook**: Posts, images, and captions
 - **Pinterest**: Pin descriptions and images
-- **Instagram**: Post captions and images
-- **Threads**: Thread text and media
-- **Reddit**: Post titles, content, and images
 
 ## Usage
 

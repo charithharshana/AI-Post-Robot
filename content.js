@@ -100,31 +100,7 @@ function initializePlatformSpecificDetection() {
         caption = pinDescription.textContent.trim();
       }
     }
-    else if (hostname.includes('instagram.com')) {
-      platform = 'Instagram';
-      const postCaption = document.querySelector('h1[class*="x1lliihq"]');
-      if (postCaption) {
-        caption = postCaption.textContent.trim();
-      }
-    }
-    else if (hostname.includes('threads.net')) {
-      platform = 'Threads';
-      const threadText = document.querySelector('div[class*="x1lliihq"]');
-      if (threadText) {
-        caption = threadText.textContent.trim();
-      }
-    }
-    else if (hostname.includes('reddit.com')) {
-      platform = 'Reddit';
-      const postTitle = document.querySelector('h1[data-test-id="post-title"]');
-      const postText = document.querySelector('div[data-test-id="post-content"]');
-      if (postTitle) {
-        caption = postTitle.textContent.trim();
-        if (postText) {
-          caption += ' - ' + postText.textContent.trim();
-        }
-      }
-    }
+
     else if (hostname.includes('facebook.com')) {
       platform = 'Facebook';
       // Enhanced Facebook detection
@@ -160,31 +136,8 @@ function getNearestCaption(element) {
   const hostname = window.location.hostname;
   let caption = '';
 
-  if (hostname.includes('instagram.com')) {
-    const article = element.closest('article');
-    if (article) {
-      const captionEl = article.querySelector('h1[class*="x1lliihq"]');
-      if (captionEl) caption = captionEl.textContent.trim();
-    }
-  }
-  else if (hostname.includes('threads.net')) {
-    const thread = element.closest('article');
-    if (thread) {
-      const textEl = thread.querySelector('div[class*="x1lliihq"]');
-      if (textEl) caption = textEl.textContent.trim();
-    }
-  }
-  else if (hostname.includes('reddit.com')) {
-    const post = element.closest('article');
-    if (post) {
-      const titleEl = post.querySelector('h1[data-test-id="post-title"]');
-      const textEl = post.querySelector('div[data-test-id="post-content"]');
-      if (titleEl) {
-        caption = titleEl.textContent.trim();
-        if (textEl) caption += ' - ' + textEl.textContent.trim();
-      }
-    }
-  }
+  // Only Facebook and Pinterest are supported now
+  // Facebook caption detection can be added here if needed
 
   return caption;
 }

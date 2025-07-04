@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function setupEventListeners() {
   document.getElementById('schedulePostsBtn').addEventListener('click', openScheduler);
-  document.getElementById('exportAllBtn').addEventListener('click', () => exportAll());
+  document.getElementById('resetBtn').addEventListener('click', resetAllContent);
   document.getElementById('addCategoryBtn').addEventListener('click', addNewCategory);
   document.getElementById('addUrlBtn').addEventListener('click', addNewUrl);
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
@@ -115,12 +115,14 @@ function updateCounts() {
         </div>
         <div style="display: flex; gap: 5px;">
           <button id="export_${category}" style="flex: 1; padding: 6px; font-size: 12px; background: #48bb78;">📤 Export</button>
+          <button id="reset_${category}" style="flex: 1; padding: 6px; font-size: 12px; background: #ed8936;">🔄 Reset</button>
           <button id="remove_${category}" style="flex: 1; padding: 6px; font-size: 12px; background: #f56565;">🗑️ Remove</button>
         </div>
       `;
       categoryList.appendChild(categoryDiv);
 
       document.getElementById(`export_${category}`).addEventListener('click', () => exportAll(category));
+      document.getElementById(`reset_${category}`).addEventListener('click', () => resetCategory(category));
       document.getElementById(`remove_${category}`).addEventListener('click', () => removeCategory(category));
     });
 
@@ -144,12 +146,18 @@ function updateCounts() {
 }
 
 function exportAll(category) {
+  // Only allow category-specific exports, not all exports
+  if (!category) {
+    alert("Please use individual category export buttons.");
+    return;
+  }
+
   chrome.storage.local.get("savedItems", (result) => {
     const savedItems = result.savedItems || {};
-    const items = category ? savedItems[category] : Object.values(savedItems).flat();
+    const items = savedItems[category] || [];
 
     if (items.length === 0) {
-      alert("No items to export.");
+      alert("No items to export in this category.");
       return;
     }
 
@@ -157,24 +165,59 @@ function exportAll(category) {
     csvContent += "Image URL,Caption\n";
     items.forEach(item => {
       // Remove line breaks and commas from the caption
-      const cleanedCaption = item.caption 
+      const cleanedCaption = item.caption
         ? item.caption.replace(/[\n\r]+/g, ' ').replace(/,/g, ' ')
         : "";
       csvContent += `${item.imageUrl},${cleanedCaption}\n`;
     });
-    
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${category || 'all'}_items.csv`);
+    link.setAttribute("download", `${category}_items.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    if (category) {
-      // Remove exported items from storage
-      delete savedItems[category];
-      
+    // Remove exported items from storage
+    delete savedItems[category];
+
+    // Recalculate counters based on remaining items
+    const remainingItems = Object.values(savedItems).flat();
+    const counters = {
+      captionCount: remainingItems.filter(item => item.caption && item.caption.trim().length > 0).length,
+      linkCount: remainingItems.filter(item => item.imageUrl).length
+    };
+
+    // Update both savedItems and counters
+    chrome.storage.local.set({ savedItems, counters }, () => {
+      updateCounts();
+      chrome.action.setBadgeText({ text: getTotalCount(savedItems).toString() });
+    });
+  });
+}
+
+function resetAllContent() {
+  if (confirm("Are you sure you want to reset all captured content? This will clear all saved items and cannot be undone.")) {
+    chrome.storage.local.set({
+      savedItems: {},
+      counters: { captionCount: 0, linkCount: 0 }
+    }, () => {
+      updateCounts();
+      chrome.action.setBadgeText({ text: "0" });
+      alert("All content has been reset successfully.");
+    });
+  }
+}
+
+function resetCategory(category) {
+  if (confirm(`Are you sure you want to reset all items in the "${category}" category? This will clear all saved items in this category and cannot be undone.`)) {
+    chrome.storage.local.get("savedItems", (result) => {
+      let savedItems = result.savedItems || {};
+
+      // Clear the specific category
+      savedItems[category] = [];
+
       // Recalculate counters based on remaining items
       const remainingItems = Object.values(savedItems).flat();
       const counters = {
@@ -182,22 +225,14 @@ function exportAll(category) {
         linkCount: remainingItems.filter(item => item.imageUrl).length
       };
 
-      // Update both savedItems and counters
+      // Update storage
       chrome.storage.local.set({ savedItems, counters }, () => {
         updateCounts();
         chrome.action.setBadgeText({ text: getTotalCount(savedItems).toString() });
+        alert(`"${category}" category has been reset successfully.`);
       });
-    } else {
-      // If exporting all items, reset everything
-      chrome.storage.local.set({ 
-        savedItems: {}, 
-        counters: { captionCount: 0, linkCount: 0 }
-      }, () => {
-        updateCounts();
-        chrome.action.setBadgeText({ text: "0" });
-      });
-    }
-  });
+    });
+  }
 }
 
 function addNewCategory() {

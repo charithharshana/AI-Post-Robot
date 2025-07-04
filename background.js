@@ -1,6 +1,6 @@
 // AI Post Robot Background Service Worker
 let selectedText = "";
-let categories = ["pets", "park", "old", "elephant"];
+let categories = ["Facebook", "Pinterest"];
 let enabledUrls = [];
 
 // Enhanced message handling for new features
@@ -434,10 +434,7 @@ chrome.runtime.onInstalled.addListener(() => {
     },
     enabledUrls: [
       "*://*.facebook.com/*",
-      "*://*.pinterest.com/*",
-      "*://*.instagram.com/*",
-      "*://*.threads.net/*",
-      "*://*.reddit.com/*"
+      "*://*.pinterest.com/*"
     ],
     // Default settings for new features
     defaultDelay: 10,
@@ -512,10 +509,7 @@ function createContextMenu() {
     contexts: ["image"],
     documentUrlPatterns: [
       "*://*.facebook.com/*",
-      "*://*.pinterest.com/*",
-      "*://*.instagram.com/*",
-      "*://*.threads.net/*",
-      "*://*.reddit.com/*"
+      "*://*.pinterest.com/*"
     ]
   });
 
@@ -527,10 +521,7 @@ function createContextMenu() {
       contexts: ["image"],
       documentUrlPatterns: [
         "*://*.facebook.com/*",
-        "*://*.pinterest.com/*",
-        "*://*.instagram.com/*",
-        "*://*.threads.net/*",
-        "*://*.reddit.com/*"
+        "*://*.pinterest.com/*"
       ]
     });
   });
@@ -546,10 +537,7 @@ function addCategory(newCategory) {
       contexts: ["image"],
       documentUrlPatterns: [
         "*://*.facebook.com/*",
-        "*://*.pinterest.com/*",
-        "*://*.instagram.com/*",
-        "*://*.threads.net/*",
-        "*://*.reddit.com/*"
+        "*://*.pinterest.com/*"
       ]
     });
     chrome.storage.local.set({ categories: categories });
