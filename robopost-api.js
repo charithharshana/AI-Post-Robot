@@ -621,6 +621,7 @@ class RoboPostAPI {
       scheduleAt,
       title,
       storageId, // Add support for pre-uploaded media
+      isVideo = false, // Flag to indicate if this is a video file
       platformSettings = {}
     } = options;
 
@@ -639,14 +640,25 @@ class RoboPostAPI {
         console.log('✅ Media uploaded, storage_id:', mediaStorageId);
       }
 
-      // Step 2: Create simple payload (exactly like Python schedule_facebook_image)
+      // Step 2: Create payload with correct media field based on type
       const payload = {
         text: caption || '',
         channel_ids: channelIds,
         schedule_at: scheduleAt,
-        image_object_ids: [mediaStorageId],
         is_draft: false
       };
+
+      // Determine if it's a video or image
+      // Use the isVideo flag if provided (for PC uploads), otherwise detect from URL
+      const isVideoFile = isVideo || this.isVideoUrl(imageUrl);
+
+      if (isVideoFile) {
+        payload.video_object_id = mediaStorageId;
+        console.log('📹 Using video_object_id for video content');
+      } else {
+        payload.image_object_ids = [mediaStorageId];
+        console.log('🖼️ Using image_object_ids for image content');
+      }
 
       // Only add YouTube settings if title provided
       if (title) {
@@ -876,6 +888,23 @@ class RoboPostAPI {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Check if a URL or data URL represents a video file
+   */
+  isVideoUrl(url) {
+    if (!url) return false;
+
+    // Check data URL MIME type
+    if (url.startsWith('data:')) {
+      return url.startsWith('data:video/');
+    }
+
+    // Check file extension
+    const extension = url.split('.').pop().toLowerCase().split('?')[0]; // Remove query params
+    const videoExtensions = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm4v'];
+    return videoExtensions.includes(extension);
   }
 
   /**

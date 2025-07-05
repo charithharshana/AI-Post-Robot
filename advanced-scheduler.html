@@ -259,6 +259,41 @@
       margin-bottom: 15px;
       font-size: 12px;
     }
+
+    .ai-toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 8px;
+      background: #e9ecef;
+      border-radius: 4px;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+
+    .ai-toggle-container input[type="checkbox"] {
+      margin: 0;
+      transform: scale(1.1);
+      cursor: pointer;
+    }
+
+    .ai-toggle-container label {
+      margin: 0;
+      cursor: pointer;
+      user-select: none;
+      flex: 1;
+    }
+
+    .ai-toggle-container.enabled {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .ai-toggle-container.disabled {
+      background: #f8d7da;
+      color: #721c24;
+    }
     
     .album-preview {
       display: flex;
@@ -637,20 +672,20 @@
           <textarea class="form-textarea resizable-title" id="postTitle" rows="1" placeholder="Enter post title (optional)"></textarea>
           <div class="rewrite-buttons" id="titleRewriteButtons">
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="title" data-prompt="engaging">✨ Engaging</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="engaging" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="title" data-prompt="make engaging title">✨ Make Engaging Title</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="make engaging title" title="Edit this prompt">✏️</button>
             </div>
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="title" data-prompt="shorten">📝 Shorten</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="shorten" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="title" data-prompt="shorten title">📝 Shorten Title</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="shorten title" title="Edit this prompt">✏️</button>
             </div>
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="title" data-prompt="professional">💼 Professional</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="professional" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="title" data-prompt="professional title">💼 Professional Title</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="professional title" title="Edit this prompt">✏️</button>
             </div>
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="title" data-prompt="casual">😊 Casual</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="casual" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="title" data-prompt="casual title">😊 Casual Title</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="title" data-prompt="casual title" title="Edit this prompt">✏️</button>
             </div>
             <button class="btn btn-small btn-ai" data-target="title" data-prompt="custom">➕ Custom</button>
           </div>
@@ -661,20 +696,20 @@
           <textarea class="form-textarea" id="postCaption" placeholder="Enter or edit caption..."></textarea>
           <div class="rewrite-buttons" id="captionRewriteButtons">
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="engaging">✨ Engaging</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="engaging" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="make engaging caption">✨ Make Engaging Caption</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="make engaging caption" title="Edit this prompt">✏️</button>
             </div>
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="shorten">📝 Shorten</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="shorten" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="shorten caption">📝 Shorten Caption</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="shorten caption" title="Edit this prompt">✏️</button>
             </div>
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="professional">💼 Professional</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="professional" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="professional caption">💼 Professional Caption</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="professional caption" title="Edit this prompt">✏️</button>
             </div>
             <div class="prompt-button-group">
-              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="casual">😊 Casual</button>
-              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="casual" title="Edit this prompt">✏️</button>
+              <button class="btn btn-small btn-ai" data-target="caption" data-prompt="casual caption">😊 Casual Caption</button>
+              <button class="btn btn-small edit-prompt-btn" data-target="caption" data-prompt="casual caption" title="Edit this prompt">✏️</button>
             </div>
             <button class="btn btn-small btn-ai" data-target="caption" data-prompt="custom">➕ Custom</button>
           </div>
@@ -863,7 +898,9 @@
         <div class="form-group">
           <label class="form-label">Rewrite Instructions</label>
           <textarea class="form-textarea" id="customPromptText" rows="4" placeholder="Enter your custom rewrite instructions here...
-Example: Make this text more professional and add relevant hashtags"></textarea>
+Example: Make this text more professional and add relevant hashtags
+
+💡 Tip: Use the toggle above to include/exclude images/videos in AI prompts!"></textarea>
         </div>
         <div class="form-group">
           <label class="form-label">Target</label>

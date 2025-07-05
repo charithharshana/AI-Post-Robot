@@ -190,9 +190,28 @@ function updateSelectedPostsInfo() {
   }
   
   infoContainer.classList.remove('hidden');
-  
+
+  // Check if media is available for AI toggle
+  const mediaData = getSelectedPostMedia();
+  const hasMedia = mediaData !== null;
+
   let html = `<strong>📋 Selected: ${selectedPosts.size} post(s)</strong>`;
-  
+
+  // Add AI toggle if media is available
+  if (hasMedia) {
+    const isEnabled = localStorage.getItem('aiIncludeMedia') !== 'false'; // Default to true
+    const toggleClass = isEnabled ? 'enabled' : 'disabled';
+    const toggleIcon = isEnabled ? '🖼️' : '📝';
+    const toggleText = isEnabled ? `Include ${mediaData.type} in AI prompts` : `Text-only AI (${mediaData.type} available)`;
+
+    html += `
+      <div class="ai-toggle-container ${toggleClass}" id="aiToggleContainer">
+        <input type="checkbox" id="aiIncludeMediaToggle" ${isEnabled ? 'checked' : ''}>
+        <label for="aiIncludeMediaToggle">${toggleIcon} ${toggleText}</label>
+      </div>
+    `;
+  }
+
   if (selectedPosts.size > 1) {
     html += '<div class="album-preview">';
     let count = 0;
@@ -210,8 +229,14 @@ function updateSelectedPostsInfo() {
     }
     html += '</div>';
   }
-  
+
   infoContainer.innerHTML = html;
+
+  // Add event listener for the toggle if it exists
+  const toggle = document.getElementById('aiIncludeMediaToggle');
+  if (toggle) {
+    toggle.addEventListener('change', handleAiToggleChange);
+  }
   
   // Update caption and title with selected post's data
   if (selectedPosts.size > 0) {
@@ -723,6 +748,55 @@ function showError(message) {
   alert(`Error: ${message}`);
 }
 
+// Generate video thumbnail from first frame
+async function generateVideoThumbnail(videoFile) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    video.onloadedmetadata = () => {
+      // Set canvas size to video dimensions (or max 400px width)
+      const maxWidth = 400;
+      const aspectRatio = video.videoHeight / video.videoWidth;
+      canvas.width = Math.min(video.videoWidth, maxWidth);
+      canvas.height = canvas.width * aspectRatio;
+
+      // Seek to 1 second or 10% of video duration, whichever is smaller
+      const seekTime = Math.min(1, video.duration * 0.1);
+      video.currentTime = seekTime;
+    };
+
+    video.onseeked = () => {
+      try {
+        // Draw video frame to canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Convert canvas to data URL
+        const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+        // Clean up
+        video.src = '';
+        URL.revokeObjectURL(video.src);
+
+        resolve(thumbnailDataUrl);
+      } catch (error) {
+        console.error('Error generating video thumbnail:', error);
+        reject(error);
+      }
+    };
+
+    video.onerror = (error) => {
+      console.error('Video loading error:', error);
+      reject(new Error('Failed to load video for thumbnail generation'));
+    };
+
+    // Load video file
+    video.src = URL.createObjectURL(videoFile);
+    video.load();
+  });
+}
+
 async function uploadFromPC() {
   console.log('📁 Opening file picker for PC upload...');
 
@@ -759,6 +833,29 @@ async function uploadFromPC() {
       // Extract filename without extension for title/caption
       const fileName = file.name.replace(/\.[^/.]+$/, "");
 
+      // Generate preview and store original data
+      let previewUrl, originalDataUrl;
+      if (file.type.startsWith('video/')) {
+        // Generate video thumbnail for preview
+        previewUrl = await generateVideoThumbnail(file);
+        // Store original video data for AI processing
+        originalDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      } else {
+        // For images, preview and original are the same
+        previewUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        originalDataUrl = previewUrl; // Same for images
+      }
+
       // Create post object - always save to "My PC" category
       const pcCategory = 'My PC';
       const postId = Date.now().toString();
@@ -766,12 +863,15 @@ async function uploadFromPC() {
         id: postId,
         title: fileName,
         caption: fileName,
-        imageUrl: URL.createObjectURL(file), // For preview
+        imageUrl: previewUrl, // Use thumbnail for videos, data URL for images
+        originalDataUrl: originalDataUrl, // Store original video/image data for AI processing
         storageId: storageId,
         category: pcCategory,
         timestamp: Date.now(),
         source: 'pc_upload',
-        filename: file.name
+        filename: file.name,
+        fileType: file.type, // Store original file type for scheduling
+        isVideo: file.type.startsWith('video/') // Helper flag for easy checking
       };
 
       // Ensure "My PC" category exists in categories list
@@ -1014,7 +1114,8 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
       // If post has storageId (from PC upload), use it directly
       if (post.storageId) {
         scheduleOptions.storageId = post.storageId;
-        console.log(`Using existing storage_id for post ${i + 1}:`, post.storageId);
+        scheduleOptions.isVideo = post.isVideo; // Pass video flag for correct API payload
+        console.log(`Using existing storage_id for post ${i + 1}:`, post.storageId, post.isVideo ? '(video)' : '(image)');
       }
 
       await window.roboPostAPI.schedulePostFromCapture(scheduleOptions);
@@ -1563,7 +1664,68 @@ async function confirmCsvImport() {
   }
 }
 
-// AI Rewrite Functionality
+// AI Toggle Handler
+function handleAiToggleChange(event) {
+  const isEnabled = event.target.checked;
+  localStorage.setItem('aiIncludeMedia', isEnabled.toString());
+
+  // Update the toggle container appearance
+  const container = document.getElementById('aiToggleContainer');
+  const label = container.querySelector('label');
+  const mediaData = getSelectedPostMedia();
+
+  if (isEnabled) {
+    container.className = 'ai-toggle-container enabled';
+    label.textContent = `🖼️ Include ${mediaData.type} in AI prompts`;
+  } else {
+    container.className = 'ai-toggle-container disabled';
+    label.textContent = `📝 Text-only AI (${mediaData.type} available)`;
+  }
+}
+
+// Media Detection and Helper Functions
+function getSelectedPostMedia() {
+  // Get the first selected post (for multimodal AI)
+  if (selectedPosts.size > 0) {
+    const firstPostId = Array.from(selectedPosts)[0];
+    const post = getPostById(firstPostId);
+    if (post && post.imageUrl) {
+      return {
+        url: post.originalDataUrl || post.imageUrl, // Use original data for AI, fallback to preview
+        type: getMediaType(post.originalDataUrl || post.imageUrl),
+        filename: post.filename || 'media'
+      };
+    }
+  }
+  return null;
+}
+
+// Check if user wants to include media in AI prompts
+function shouldIncludeMediaInAI() {
+  const mediaData = getSelectedPostMedia();
+  if (!mediaData) return false;
+
+  // Check user preference from toggle
+  const userPreference = localStorage.getItem('aiIncludeMedia');
+  return userPreference !== 'false'; // Default to true if not set
+}
+
+function getMediaType(url) {
+  if (!url) return 'unknown';
+
+  const extension = url.split('.').pop().toLowerCase();
+  const videoExtensions = ['mp4', 'webm', 'mov', 'avi', 'mkv'];
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+  if (videoExtensions.includes(extension)) {
+    return 'video';
+  } else if (imageExtensions.includes(extension)) {
+    return 'image';
+  }
+  return 'image'; // Default to image
+}
+
+// AI Rewrite Functionality with Multimodal Support
 async function handleRewriteClick(event) {
   const button = event.target;
 
@@ -1576,7 +1738,7 @@ async function handleRewriteClick(event) {
   }
 
   const target = button.dataset.target; // 'title' or 'caption'
-  const promptType = button.dataset.prompt; // 'engaging', 'shorten', etc.
+  const promptType = button.dataset.prompt; // 'make engaging title', 'shorten caption', etc.
 
   if (promptType === 'custom') {
     showCustomPromptDialog(target);
@@ -1590,8 +1752,13 @@ async function handleRewriteClick(event) {
 
   const currentText = textElement.value.trim();
 
-  if (!currentText) {
-    showMessage(`❌ Please enter some ${target} text first`, 'error');
+  // Check if user wants to include media in AI prompts
+  const isMultimodal = shouldIncludeMediaInAI();
+  const mediaData = isMultimodal ? getSelectedPostMedia() : null;
+
+  // Allow empty text if we have media and multimodal is enabled
+  if (!currentText && !mediaData) {
+    showMessage(`❌ Please enter some ${target} text first or select an image/video with the toggle enabled`, 'error');
     return;
   }
 
@@ -1611,15 +1778,52 @@ async function handleRewriteClick(event) {
     return;
   }
 
-  // Show loading state
+  // Media data already retrieved above for validation
+
+  // Show loading state with appropriate feedback
   const originalText = button.textContent;
-  button.textContent = '🔄';
+
+  // Enhanced loading indicators based on content type
+  if (isMultimodal && mediaData) {
+    if (mediaData.type === 'video') {
+      button.textContent = '🔄🎥 Processing video...';
+      showMessage('🎥 Processing video with enhanced AI optimization...', 'info');
+    } else {
+      button.textContent = '🔄🖼️ Processing image...';
+      showMessage('🖼️ Processing image with AI...', 'info');
+    }
+  } else {
+    button.textContent = '🔄 Processing...';
+  }
+
   button.disabled = true;
   button.classList.add('loading');
 
   try {
-    // Call Gemini API to rewrite the text
-    const rewrittenText = await window.geminiAPI.rewriteText(currentText, promptData.prompt);
+    let rewrittenText;
+
+    if (isMultimodal) {
+      // Use multimodal API with image/video
+      console.log(`🖼️ Using multimodal AI with ${mediaData.type}:`, mediaData.filename);
+
+      // If no text provided, use a default prompt for generating from image
+      const textToProcess = currentText || `[Generate ${target} from this image/video]`;
+
+      rewrittenText = await window.geminiAPI.rewriteTextWithMedia(
+        textToProcess,
+        promptData.prompt,
+        mediaData.url
+      );
+
+      const action = currentText ? 'rewritten' : 'generated';
+      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} ${action} with ${mediaData.type} context!`, 'success');
+    } else {
+      // Fall back to text-only API
+      console.log('📝 Using text-only AI (no media selected)');
+      rewrittenText = await window.geminiAPI.rewriteText(currentText, promptData.prompt);
+
+      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten successfully!`, 'success');
+    }
 
     // Update the text field
     textElement.value = rewrittenText.trim();
@@ -1630,16 +1834,58 @@ async function handleRewriteClick(event) {
     }
 
     // Show success feedback
-    textElement.style.background = '#e6fffa';
+    textElement.style.background = isMultimodal ? '#e6fff0' : '#e6fffa';
     setTimeout(() => {
       textElement.style.background = '';
     }, 2000);
 
-    showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten successfully!`, 'success');
-
   } catch (error) {
     console.error('Rewrite error:', error);
-    showMessage(`❌ Rewrite failed: ${error.message}`, 'error');
+
+    // Enhanced error handling with better user guidance
+    let errorMessage = error.message;
+    let suggestion = '';
+    let actionable = true;
+
+    // Video-specific error handling
+    if (error.message.includes('Video processing failed after') && error.message.includes('attempts')) {
+      suggestion = ' 🎥 Enhanced video processing failed. The video may be too complex or in an unsupported format. Try: 1) Using a shorter video clip, 2) Converting to MP4 format, 3) Reducing file size, or 4) Using text-only generation.';
+      actionable = true;
+    } else if (error.message.includes('Video processing failed')) {
+      suggestion = ' 🎥 Video processing encountered an issue. The system automatically tried multiple approaches. You can: 1) Try again (sometimes works on retry), 2) Use a different video, or 3) Switch to text-only mode.';
+      actionable = true;
+    } else if (error.message.includes('Request timeout')) {
+      suggestion = ' ⏱️ The request took too long to process. This can happen with large videos. Try: 1) Using a smaller video file, 2) Trying again, or 3) Using text-only generation.';
+      actionable = true;
+    } else if (error.message.includes('Media file is too large')) {
+      suggestion = ' 📁 File size exceeds the 20MB limit. Please compress your video/image or use a smaller file.';
+      actionable = true;
+    } else if (error.message.includes('Auto-switching') || error.message.includes('video-optimized')) {
+      suggestion = ' 🔄 The system automatically optimized settings for your content. If this error persists, try using text-only mode or a different media file.';
+      actionable = true;
+    } else if (error.message.includes('Multimodal generation failed')) {
+      suggestion = ' 💡 Image/video processing failed. The system has automatically switched to the best available model. Try again or use text-only mode.';
+      actionable = true;
+    } else if (error.message.includes('No content generated')) {
+      suggestion = ' 💡 The AI couldn\'t generate content. This is automatically handled with optimized models. Try: 1) Simplifying your prompt, 2) Using different media, or 3) Text-only mode.';
+      actionable = true;
+    } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+      suggestion = ' 💡 Rate limit reached. Please wait a moment and try again, or add more API keys in Settings.';
+      actionable = true;
+    } else if (error.message.includes('Both multimodal and text-only generation failed')) {
+      suggestion = ' ⚠️ All generation methods failed. Please check your API keys in Settings or try again later.';
+      actionable = false;
+    } else if (error.message.includes('API Error')) {
+      suggestion = ' 🔑 API error occurred. Please check your Gemini API keys in Settings.';
+      actionable = false;
+    } else {
+      suggestion = ' 💡 An unexpected error occurred. Try again or use text-only mode if the issue persists.';
+      actionable = true;
+    }
+
+    // Show appropriate message based on whether the error is actionable
+    const messageType = actionable ? 'error' : 'error';
+    showMessage(`❌ ${actionable ? 'Processing failed' : 'System error'}: ${errorMessage}${suggestion}`, messageType);
   } finally {
     // Reset button state
     button.textContent = originalText;
@@ -1778,8 +2024,13 @@ async function applyCustomPrompt() {
 
   const currentText = textElement.value.trim();
 
-  if (!currentText) {
-    showMessage(`❌ Please enter some ${target} text first`, 'error');
+  // Check if user wants to include media in AI prompts
+  const isMultimodal = shouldIncludeMediaInAI();
+  const mediaData = isMultimodal ? getSelectedPostMedia() : null;
+
+  // Allow empty text if we have media and multimodal is enabled
+  if (!currentText && !mediaData) {
+    showMessage(`❌ Please enter some ${target} text first or select an image/video with the toggle enabled`, 'error');
     return;
   }
 
@@ -1789,14 +2040,38 @@ async function applyCustomPrompt() {
     return;
   }
 
+  // Media data already retrieved above for validation
+
   const button = document.getElementById('applyCustomPromptBtn');
   const originalText = button.textContent;
-  button.textContent = '🔄 Processing...';
+  button.textContent = isMultimodal ? '🔄🖼️ Processing...' : '🔄 Processing...';
   button.disabled = true;
 
   try {
-    // Call Gemini API to rewrite the text
-    const rewrittenText = await window.geminiAPI.rewriteText(currentText, promptText);
+    let rewrittenText;
+
+    if (isMultimodal) {
+      // Use multimodal API with image/video
+      console.log(`🖼️ Using custom multimodal AI with ${mediaData.type}:`, mediaData.filename);
+
+      // If no text provided, use a default prompt for generating from image
+      const textToProcess = currentText || `[Generate ${target} from this image/video]`;
+
+      rewrittenText = await window.geminiAPI.rewriteTextWithMedia(
+        textToProcess,
+        promptText,
+        mediaData.url
+      );
+
+      const action = currentText ? 'rewritten' : 'generated';
+      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} ${action} with custom prompt and ${mediaData.type} context!`, 'success');
+    } else {
+      // Fall back to text-only API
+      console.log('📝 Using custom text-only AI (no media selected)');
+      rewrittenText = await window.geminiAPI.rewriteText(currentText, promptText);
+
+      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten with custom prompt!`, 'success');
+    }
 
     // Update the text field
     textElement.value = rewrittenText.trim();
@@ -1807,19 +2082,61 @@ async function applyCustomPrompt() {
     }
 
     // Show success feedback
-    textElement.style.background = '#e6fffa';
+    textElement.style.background = isMultimodal ? '#e6fff0' : '#e6fffa';
     setTimeout(() => {
       textElement.style.background = '';
     }, 2000);
-
-    showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten successfully!`, 'success');
 
     // Hide dialog
     hideCustomPromptDialog();
 
   } catch (error) {
     console.error('Custom rewrite error:', error);
-    showMessage(`❌ Rewrite failed: ${error.message}`, 'error');
+
+    // Enhanced error handling with better user guidance (same as main rewrite function)
+    let errorMessage = error.message;
+    let suggestion = '';
+    let actionable = true;
+
+    // Video-specific error handling
+    if (error.message.includes('Video processing failed after') && error.message.includes('attempts')) {
+      suggestion = ' 🎥 Enhanced video processing failed. The video may be too complex or in an unsupported format. Try: 1) Using a shorter video clip, 2) Converting to MP4 format, 3) Reducing file size, or 4) Using text-only generation.';
+      actionable = true;
+    } else if (error.message.includes('Video processing failed')) {
+      suggestion = ' 🎥 Video processing encountered an issue. The system automatically tried multiple approaches. You can: 1) Try again (sometimes works on retry), 2) Use a different video, or 3) Switch to text-only mode.';
+      actionable = true;
+    } else if (error.message.includes('Request timeout')) {
+      suggestion = ' ⏱️ The request took too long to process. This can happen with large videos. Try: 1) Using a smaller video file, 2) Trying again, or 3) Using text-only generation.';
+      actionable = true;
+    } else if (error.message.includes('Media file is too large')) {
+      suggestion = ' 📁 File size exceeds the 20MB limit. Please compress your video/image or use a smaller file.';
+      actionable = true;
+    } else if (error.message.includes('Auto-switching') || error.message.includes('video-optimized')) {
+      suggestion = ' 🔄 The system automatically optimized settings for your content. If this error persists, try using text-only mode or a different media file.';
+      actionable = true;
+    } else if (error.message.includes('Multimodal generation failed')) {
+      suggestion = ' 💡 Image/video processing failed. The system has automatically switched to the best available model. Try again or use text-only mode.';
+      actionable = true;
+    } else if (error.message.includes('No content generated')) {
+      suggestion = ' 💡 The AI couldn\'t generate content. This is automatically handled with optimized models. Try: 1) Simplifying your prompt, 2) Using different media, or 3) Text-only mode.';
+      actionable = true;
+    } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+      suggestion = ' 💡 Rate limit reached. Please wait a moment and try again, or add more API keys in Settings.';
+      actionable = true;
+    } else if (error.message.includes('Both multimodal and text-only generation failed')) {
+      suggestion = ' ⚠️ All generation methods failed. Please check your API keys in Settings or try again later.';
+      actionable = false;
+    } else if (error.message.includes('API Error')) {
+      suggestion = ' 🔑 API error occurred. Please check your Gemini API keys in Settings.';
+      actionable = false;
+    } else {
+      suggestion = ' 💡 An unexpected error occurred. Try again or use text-only mode if the issue persists.';
+      actionable = true;
+    }
+
+    // Show appropriate message based on whether the error is actionable
+    const messageType = actionable ? 'error' : 'error';
+    showMessage(`❌ Custom prompt ${actionable ? 'failed' : 'error'}: ${errorMessage}${suggestion}`, messageType);
   } finally {
     // Reset button state
     button.textContent = originalText;
@@ -1827,12 +2144,64 @@ async function applyCustomPrompt() {
   }
 }
 
+// Debug function to show prompt structure (for development/testing)
+window.showPromptExample = function() {
+  const selectedPost = selectedPosts.size > 0 ? getPostById(Array.from(selectedPosts)[0]) : null;
+  const sampleText = "This is a sample title text";
+  const sampleInstruction = "Based on this image/video and text, create a short, engaging title in the same language as the text. Provide only one option:";
+
+  if (selectedPost && selectedPost.imageUrl) {
+    const example = window.geminiAPI.getPromptExample(sampleText, sampleInstruction, selectedPost.imageUrl);
+    console.log('🔍 PROMPT EXAMPLE FOR SELECTED POST:');
+    console.log('📝 Text-only prompt:', example.textOnlyPrompt);
+    console.log('🖼️ Multimodal prompt structure:', example.multimodalPrompt);
+
+    // Show in a modal for easy viewing
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); z-index: 10000; display: flex;
+      align-items: center; justify-content: center; padding: 20px;
+    `;
+
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: white; padding: 20px; border-radius: 8px;
+      max-width: 80%; max-height: 80%; overflow: auto;
+      font-family: monospace; font-size: 12px;
+    `;
+
+    content.innerHTML = `
+      <h3>🔍 Prompt Structure Example</h3>
+      <h4>📝 Text-only prompt:</h4>
+      <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">${example.textOnlyPrompt}</pre>
+
+      <h4>🖼️ Multimodal API structure:</h4>
+      <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">${JSON.stringify(example.multimodalPrompt?.apiStructure, null, 2)}</pre>
+
+      <p><strong>Note:</strong> The actual base64 image data is included in the API request but truncated here for readability.</p>
+
+      <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px; padding: 8px 16px;">Close</button>
+    `;
+
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+
+    return example;
+  } else {
+    console.log('❌ Please select a post with an image first');
+    alert('Please select a post with an image first to see the prompt example');
+    return null;
+  }
+};
+
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   // Load custom prompts first
   await window.loadCustomPrompts();
 
-  loadCapturedPosts();
+  // Load saved data (posts) - this replaces the undefined loadCapturedPosts
+  await loadSavedData();
   setupEventListeners();
   setupRewriteButtonListeners();
   updateCaptionCharCount();

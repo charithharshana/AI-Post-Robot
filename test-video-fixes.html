@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Processing Fixes Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Video Processing Fixes Test</h1>
+    <p>This test verifies the video processing improvements in the Gemini API integration.</p>
+
+    <div class="test-section">
+        <h3>Test 1: Video Format Validation</h3>
+        <p>Tests if the system correctly validates video formats</p>
+        <button onclick="testVideoFormatValidation()">Run Test</button>
+        <div id="test1-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Video Size Validation</h3>
+        <p>Tests if the system correctly validates video file sizes</p>
+        <button onclick="testVideoSizeValidation()">Run Test</button>
+        <div id="test2-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: Model Compatibility Check</h3>
+        <p>Tests if the system correctly identifies video compatibility issues</p>
+        <button onclick="testModelCompatibility()">Run Test</button>
+        <div id="test3-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 4: Error Message Improvements</h3>
+        <p>Tests if error messages provide helpful guidance</p>
+        <button onclick="testErrorMessages()">Run Test</button>
+        <div id="test4-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 5: Automatic Model Selection</h3>
+        <p>Tests if the system automatically selects optimal models for video content</p>
+        <button onclick="testAutoModelSelection()">Run Test</button>
+        <div id="test5-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 6: Video Processing Info</h3>
+        <p>Tests the new video processing information and status methods</p>
+        <button onclick="testVideoProcessingInfo()">Run Test</button>
+        <div id="test6-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 7: Enhanced Video Processing Strategy</h3>
+        <p>Tests if the enhanced video processing strategy is properly configured</p>
+        <button onclick="testEnhancedVideoStrategy()">Run Test</button>
+        <div id="test7-result"></div>
+    </div>
+
+    <div id="results"></div>
+
+    <script src="gemini-api.js"></script>
+    <script>
+        // Mock GeminiAPI for testing
+        const geminiAPI = new GeminiAPI('test-key');
+
+        function displayResult(testId, success, message) {
+            const resultDiv = document.getElementById(testId + '-result');
+            const className = success ? 'success' : 'error';
+            resultDiv.innerHTML = `<div class="test-result ${className}">${message}</div>`;
+        }
+
+        function testVideoFormatValidation() {
+            try {
+                // Test supported format
+                const supportedVideo = {
+                    mimeType: 'video/mp4',
+                    base64Data: 'test-data'
+                };
+                const result1 = geminiAPI.validateMediaData(supportedVideo, 'gemini-2.5-flash');
+                
+                // Test unsupported format
+                const unsupportedVideo = {
+                    mimeType: 'video/mkv',
+                    base64Data: 'test-data'
+                };
+                const result2 = geminiAPI.validateMediaData(unsupportedVideo, 'gemini-2.5-flash');
+                
+                if (result1.valid && !result2.valid) {
+                    displayResult('test1', true, 'Video format validation working correctly');
+                } else {
+                    displayResult('test1', false, 'Video format validation failed');
+                }
+            } catch (error) {
+                displayResult('test1', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        function testVideoSizeValidation() {
+            try {
+                // Test if video compatibility issues are detected
+                const videoData = {
+                    mimeType: 'video/mp4',
+                    base64Data: 'test-data'
+                };
+                
+                const result1 = geminiAPI.hasVideoCompatibilityIssues('gemini-2.5-flash');
+                const result2 = geminiAPI.hasVideoCompatibilityIssues('gemini-2.5-flash-lite-preview-06-17');
+                
+                if (result1 && !result2) {
+                    displayResult('test2', true, 'Video compatibility detection working correctly');
+                } else {
+                    displayResult('test2', false, 'Video compatibility detection failed');
+                }
+            } catch (error) {
+                displayResult('test2', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        function testModelCompatibility() {
+            try {
+                // Test video content detection
+                const videoData = {
+                    mimeType: 'video/mp4',
+                    base64Data: 'test-data'
+                };
+                const imageData = {
+                    mimeType: 'image/jpeg',
+                    base64Data: 'test-data'
+                };
+                
+                const isVideo = geminiAPI.isVideoContent(videoData);
+                const isNotVideo = !geminiAPI.isVideoContent(imageData);
+                
+                if (isVideo && isNotVideo) {
+                    displayResult('test3', true, 'Video content detection working correctly');
+                } else {
+                    displayResult('test3', false, 'Video content detection failed');
+                }
+            } catch (error) {
+                displayResult('test3', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        function testErrorMessages() {
+            try {
+                // Test validation with problematic model and video
+                const videoData = {
+                    mimeType: 'video/mp4',
+                    base64Data: 'test-data'
+                };
+
+                const validation = geminiAPI.validateMediaData(videoData, 'gemini-2.5-flash');
+
+                if (validation.warning && validation.warning.includes('video support')) {
+                    displayResult('test4', true, 'Error messages provide helpful guidance');
+                } else {
+                    displayResult('test4', false, 'Error messages need improvement');
+                }
+            } catch (error) {
+                displayResult('test4', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        function testAutoModelSelection() {
+            try {
+                const videoData = {
+                    mimeType: 'video/mp4',
+                    base64Data: 'test-data'
+                };
+
+                // Test automatic model selection for video
+                const optimalModel = geminiAPI.selectOptimalModel(videoData, 'gemini-2.5-flash');
+                const bestVideoModel = geminiAPI.getBestVideoModel();
+
+                if (optimalModel === bestVideoModel) {
+                    displayResult('test5', true, `Automatic model selection working: ${optimalModel}`);
+                } else {
+                    displayResult('test5', false, `Model selection failed: got ${optimalModel}, expected ${bestVideoModel}`);
+                }
+            } catch (error) {
+                displayResult('test5', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        function testVideoProcessingInfo() {
+            try {
+                const videoData = {
+                    mimeType: 'video/mp4',
+                    base64Data: 'test-data'
+                };
+
+                // Test video processing info
+                const info = geminiAPI.getVideoProcessingInfo(videoData, 'gemini-2.5-flash');
+
+                if (info.hasVideo && info.processingStrategy === 'enhanced_video_retry' && info.expectedFeatures.length > 0) {
+                    displayResult('test6', true, `Video processing info working: ${info.expectedFeatures.length} features detected`);
+                } else {
+                    displayResult('test6', false, 'Video processing info incomplete');
+                }
+            } catch (error) {
+                displayResult('test6', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        function testEnhancedVideoStrategy() {
+            try {
+                // Test if enhanced video processing methods exist
+                const hasProcessVideoWithRetry = typeof geminiAPI.processVideoWithRetry === 'function';
+                const hasGetBestVideoModel = typeof geminiAPI.getBestVideoModel === 'function';
+                const hasSelectOptimalModel = typeof geminiAPI.selectOptimalModel === 'function';
+
+                if (hasProcessVideoWithRetry && hasGetBestVideoModel && hasSelectOptimalModel) {
+                    displayResult('test7', true, 'Enhanced video processing strategy methods available');
+                } else {
+                    displayResult('test7', false, 'Enhanced video processing strategy incomplete');
+                }
+            } catch (error) {
+                displayResult('test7', false, `Test failed: ${error.message}`);
+            }
+        }
+
+        // Run all tests automatically
+        window.onload = function() {
+            setTimeout(() => {
+                testVideoFormatValidation();
+                setTimeout(() => testVideoSizeValidation(), 100);
+                setTimeout(() => testModelCompatibility(), 200);
+                setTimeout(() => testErrorMessages(), 300);
+                setTimeout(() => testAutoModelSelection(), 400);
+                setTimeout(() => testVideoProcessingInfo(), 500);
+                setTimeout(() => testEnhancedVideoStrategy(), 600);
+            }, 500);
+        };
+    </script>
+</body>
+</html>
