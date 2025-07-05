@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "description": "Intelligent social media content capture and bulk scheduling tool with RoboPost API integration. Capture text and images from Facebook and Pinterest for automated posting.",
   "author": "Charith Harshana",
-  "homepage_url": "https://github.com/charithharshana/ai-post-robot",
+  "homepage_url": "https://github.com/charithharshana/AI-Post-Robot",
   "permissions": [
     "contextMenus",
     "storage",

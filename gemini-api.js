@@ -112,15 +112,10 @@ class GeminiAPI {
       try {
         if (attempt > 1) {
           const delay = baseDelay * attempt; // Progressive delay
-          console.log(`🔄 Enhanced API retry attempt ${attempt}/${maxRetries} for ${isVideo ? 'video' : 'content'} (delay: ${delay}ms)`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
 
         const result = await this.makeRequest(endpoint, payload, 1); // Single attempt per retry
-
-        if (attempt > 1) {
-          console.log(`✅ Enhanced API request successful on retry attempt ${attempt}`);
-        }
 
         return result;
       } catch (error) {
@@ -128,7 +123,7 @@ class GeminiAPI {
           throw error; // Re-throw on final attempt
         }
 
-        console.warn(`⚠️ Enhanced API attempt ${attempt} failed, retrying...`, error.message);
+
       }
     }
   }
@@ -412,11 +407,9 @@ Rewritten text:`;
         const currentDelay = Math.min(baseDelay * attempt, maxDelay);
 
         if (attempt > 1) {
-          console.log(`⏳ Waiting ${currentDelay}ms before retry (progressive delay)...`);
           await new Promise(resolve => setTimeout(resolve, currentDelay));
         } else {
           // Even first attempt needs initial delay for video processing
-          console.log(`⏳ Initial video processing delay: ${baseDelay}ms...`);
           await new Promise(resolve => setTimeout(resolve, baseDelay));
         }
 
@@ -436,8 +429,6 @@ Rewritten text:`;
             modelToUse = this.getBestVideoModel();
         }
 
-        console.log(`🎯 Using model: ${modelToUse} for attempt ${attempt}`);
-
         const processOptions = {
           ...options,
           model: modelToUse,
@@ -448,19 +439,15 @@ Rewritten text:`;
         };
 
         // Add extra processing time for video content
-        console.log(`🎥 Starting video processing with enhanced async handling...`);
         const result = await this.generateMultimodalTextWithTimeout(prompt, mediaData, processOptions, 45000); // 45 second timeout
 
         if (result && result.trim() && result.length > 10) { // Ensure meaningful content
-          console.log(`✅ Video processing successful on attempt ${attempt} with model ${modelToUse}`);
           return result;
         } else {
           throw new Error(`Insufficient content generated: "${result}"`);
         }
 
       } catch (error) {
-        console.warn(`❌ Video processing attempt ${attempt} failed:`, error.message);
-
         if (attempt === maxRetries) {
           // On final attempt, throw a comprehensive error
           throw new Error(`Video processing failed after ${maxRetries} attempts with progressive delays. Last error: ${error.message}`);
@@ -485,7 +472,6 @@ Rewritten text:`;
       try {
         // Add extra delay before actual API call for video content
         if (mediaData && this.isVideoContent(mediaData)) {
-          console.log(`⏳ Pre-processing delay for video content...`);
           await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second pre-processing delay
         }
 
@@ -568,11 +554,9 @@ Rewritten text:`;
         const videoSizeEstimate = mediaData.base64Data.length;
         const sizeBasedDelay = Math.min(Math.max(1000, videoSizeEstimate / 10000), 5000); // 1-5 seconds based on size
 
-        console.log(`⏳ Video size-based delay: ${sizeBasedDelay}ms`);
         await new Promise(resolve => setTimeout(resolve, sizeBasedDelay));
 
         // Additional processing delay for video stabilization
-        console.log(`⏳ Video stabilization delay: 1500ms`);
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
@@ -602,7 +586,6 @@ Rewritten text:`;
       const timeoutMs = isVideo ? 60000 : 20000; // 60s for video, 20s for images (increased)
 
       if (isVideo) {
-        console.log(`🎥 Making API request with ${timeoutMs}ms timeout for video content...`);
         // Additional delay before making the actual API request for videos
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
@@ -619,9 +602,6 @@ Rewritten text:`;
         if (content && content.parts && content.parts.length > 0) {
           const result = content.parts[0].text;
           if (result && result.trim() && result.length > 5) { // Ensure meaningful content
-            if (isVideo) {
-              console.log(`✅ Video API request successful, content length: ${result.length}`);
-            }
             return result;
           }
         }
@@ -788,81 +768,9 @@ Rewritten text:`;
     return compatibility;
   }
 
-  /**
-   * Get video processing status and recommendations
-   */
-  getVideoProcessingInfo(mediaData = null, currentModel = null) {
-    const info = {
-      hasVideo: false,
-      videoOptimized: false,
-      modelRecommendation: null,
-      processingStrategy: 'standard',
-      expectedFeatures: []
-    };
 
-    if (mediaData && this.isVideoContent(mediaData)) {
-      info.hasVideo = true;
-      info.modelRecommendation = this.getModelRecommendation(mediaData, currentModel);
-      info.videoOptimized = info.modelRecommendation.recommendedModel === this.getBestVideoModel();
-      info.processingStrategy = 'enhanced_video_retry';
-      info.expectedFeatures = [
-        'Automatic model optimization',
-        'Multi-attempt processing with delays',
-        'Enhanced timeout handling (30s)',
-        'Intelligent fallback strategies',
-        'Video-specific error handling'
-      ];
-    } else if (mediaData) {
-      info.processingStrategy = 'standard_multimodal';
-      info.expectedFeatures = [
-        'Standard multimodal processing',
-        'Image optimization',
-        'Standard timeout (15s)'
-      ];
-    } else {
-      info.processingStrategy = 'text_only';
-      info.expectedFeatures = ['Text-only generation'];
-    }
 
-    return info;
-  }
 
-  /**
-   * Debug method to log current video processing capabilities
-   */
-  logVideoProcessingStatus() {
-    console.log('🎥 Video Processing Status:');
-    console.log('- Current model:', this.model);
-    console.log('- Best video model:', this.getBestVideoModel());
-    console.log('- Video-optimized models available:', ['gemini-2.5-flash-lite-preview-06-17', 'gemini-2.0-flash-preview', 'gemini-1.5-flash-latest']);
-    console.log('- Enhanced processing features: Multi-retry, Auto-model-selection, Extended-timeouts, Smart-fallbacks');
-    console.log('- Enhanced async features: Progressive-delays, Size-based-delays, Pre-processing-delays, Timeout-handling');
-  }
-
-  /**
-   * Comprehensive video processing diagnostics
-   */
-  async diagnoseVideoProcessing(mediaData, prompt) {
-    console.log('🔍 Video Processing Diagnostics:');
-    console.log('- Video detected:', this.isVideoContent(mediaData));
-    console.log('- Video size estimate:', mediaData?.base64Data?.length || 'N/A');
-    console.log('- Current model:', this.model);
-    console.log('- Recommended model:', this.selectOptimalModel(mediaData));
-
-    const info = this.getVideoProcessingInfo(mediaData);
-    console.log('- Processing strategy:', info.processingStrategy);
-    console.log('- Expected features:', info.expectedFeatures);
-
-    // Test model compatibility
-    const compatibility = this.getModelCompatibilityInfo();
-    console.log('- Model compatibility:', compatibility.recommendation);
-
-    console.log('🎯 Recommended approach:');
-    console.log('1. Use progressive delays (3s, 6s, 9s)');
-    console.log('2. Try multiple models (gemini-2.5-flash-lite-preview-06-17, gemini-1.5-flash-latest, gemini-1.5-pro-latest)');
-    console.log('3. Use extended timeouts (60s for video)');
-    console.log('4. Apply size-based pre-processing delays');
-  }
 
   /**
    * Debug function to show exact prompt structure sent to LLM
