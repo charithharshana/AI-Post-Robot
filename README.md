@@ -28,11 +28,16 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 - **Video Support**: Advanced video processing with fallback mechanisms
 
 ### 🖼️ Image & Media Management
-- **Image Editor**: Built-in image editing with crop presets (1:1, 16:9, 9:16)
-- **Watermark Support**: Persistent logo/watermark functionality
 - **Media Upload**: Direct file upload from PC with drag-and-drop
 - **Format Support**: Images, videos, and various media formats
 - **Storage Management**: Efficient media storage and retrieval
+- **Advanced Image Editor**: Professional image editing with AI-powered features
+- **Crop Presets**: Quick crop ratios (1:1, 16:9, 9:16) for different social platforms
+- **Watermark Support**: Add and position watermarks with drag-and-drop functionality
+- **AI Image Enhancement**: Google Gemini-powered image editing and generation
+- **Text Overlay**: Add and edit text elements with full customization
+- **Basic Editing Tools**: Rotate, crop, resize, and adjust images
+- **Visual Selection**: Interactive selection tools with real-time feedback
 
 ### 📊 Content Management
 - **Category organization**: Organize captured content by custom categories
@@ -109,6 +114,7 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 3. **Image Capture**: Right-click on images → "Save image link and caption"
 4. **Manual Upload**: Upload files directly in Advanced Scheduler
 5. **Drag & Drop**: Drop files into the Advanced Scheduler interface
+6. **Image Editing**: Professional editing with AI-powered enhancements
 
 ### Scheduling Options
 
@@ -124,9 +130,33 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 2. **Visual Management**: See all posts in a grid layout
 3. **Bulk Selection**: Select multiple posts for batch operations
 4. **AI Enhancement**: Use Gemini AI to rewrite captions
-5. **Flexible Scheduling**: Fixed, random, or optimal timing
-6. **Album Creation**: Group multiple images into albums
-7. **Instant Publishing**: Publish immediately or schedule for later
+5. **Image Editing**: Professional image editor with AI-powered features
+6. **Flexible Scheduling**: Fixed, random, or optimal timing
+7. **Album Creation**: Group multiple images into albums
+8. **Instant Publishing**: Publish immediately or schedule for later
+
+### Professional Image Editor
+- **AI-Powered Editing**: Google Gemini integration for intelligent image enhancement
+- **Crop Presets**: Quick social media ratios (1:1 Square, 16:9 Landscape, 9:16 Portrait)
+- **Watermark Management**: Drag-and-drop watermark positioning with persistence
+- **Text Elements**: Add, edit, and style text overlays with full customization
+- **Basic Tools**: Rotate, resize, crop, and adjust images with visual feedback
+- **Selection Tools**: Interactive selection with real-time preview
+- **Export Options**: High-quality JPEG export with customizable quality settings
+- **Seamless Integration**: Edit images directly within the Advanced Scheduler
+- **Undo/Redo**: Full editing history with step-by-step reversal
+- **Professional UI**: Clean, intuitive interface optimized for social media content
+
+#### Image Editor Usage Guide
+1. **Access Editor**: Select a single image post and click "Edit Image" button
+2. **Basic Editing**: Use rotate, crop, and resize tools with visual feedback
+3. **Crop Presets**: Apply social media ratios (1:1, 16:9, 9:16) instantly
+4. **Add Watermarks**: Drag and drop watermark images with free positioning
+5. **Text Elements**: Add text overlays with font, size, and color customization
+6. **AI Enhancement**: Use Google Gemini for intelligent image improvements
+7. **Selection Tools**: Make precise selections with interactive feedback
+8. **Save Changes**: Apply edits and automatically update the post image
+9. **Quality Control**: Export with customizable JPEG quality settings
 
 ### Content Management
 - **Categories**: Organize content with custom categories
@@ -134,7 +164,6 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 - **Statistics**: Monitor capture counts and performance
 - **Export**: Download captured content as CSV
 - **Bulk Operations**: Delete, schedule, or modify multiple posts
-- **Image Editing**: Crop, resize, and add watermarks
 
 ## 🔧 Technical Architecture
 
@@ -163,6 +192,10 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 ├── advanced-scheduler.html/js # Advanced scheduling with AI features
 ├── robopost-api.js           # RoboPost API integration module
 ├── gemini-api.js             # Google Gemini AI integration
+├── image-editor-module/      # Professional image editor integration
+│   ├── image-editor-integration.js # Main integration module
+│   ├── ai-image-editor.js    # AI-powered image editor (Pixie)
+│   └── assets/               # Editor assets (fonts, images, etc.)
 ├── docs/                     # Documentation and testing guides
 │   ├── RoboPost_API_Knowledge_Base.md
 │   └── TESTING.md
@@ -172,7 +205,7 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 ### Key Features Implementation
 - **Content Detection**: Platform-specific selectors for caption extraction
 - **AI Integration**: Modular Gemini API wrapper with model management
-- **Image Processing**: Built-in image editor with crop and watermark features
+- **Image Editor**: Professional Pixie-based editor with AI enhancement capabilities
 - **Scheduling Engine**: Multiple timing algorithms (fixed, random, optimal)
 - **Data Management**: Efficient storage, retrieval, and export systems
 - **UI Components**: Modern, responsive interface with drag-and-drop support
@@ -201,14 +234,24 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 3. View captured content in popup (click extension icon)
 4. Organize content into categories
 
-### Example 2: AI-Enhanced Scheduling
+### Example 2: AI-Enhanced Scheduling with Image Editing
 1. Open Advanced Scheduler
 2. Upload or select captured images
-3. Use AI to rewrite captions (4 style options)
-4. Schedule posts with optimal timing
-5. Monitor publishing status
+3. Click "Edit Image" to open the professional image editor
+4. Apply AI-powered enhancements, add watermarks, or crop images
+5. Use AI to rewrite captions (4 style options)
+6. Schedule posts with optimal timing
+7. Monitor publishing status
 
-### Example 3: Bulk Album Creation
+### Example 3: Professional Image Editing
+1. Select an image post in Advanced Scheduler
+2. Click "Edit Image" to open the professional editor
+3. Apply crop presets for optimal social media dimensions
+4. Add watermarks or text overlays for branding
+5. Use AI enhancement for improved image quality
+6. Save changes and continue with scheduling
+
+### Example 4: Bulk Album Creation
 1. Select multiple related images in Advanced Scheduler
 2. Choose "Album" publishing type
 3. Add unified caption and title
@@ -254,8 +297,8 @@ This project is open source. Please check the repository for license details.
 ### v2.0.0 (Current)
 - **Major Rewrite**: Complete codebase overhaul with modern architecture
 - **Advanced Scheduler**: Professional scheduling interface with visual management
+- **Professional Image Editor**: AI-powered image editing with Pixie integration
 - **AI Integration**: Google Gemini API with multiple models and key rotation
-- **Image Editor**: Built-in editing with crop presets and watermark support
 - **Enhanced UI**: Modern, responsive design with improved user experience
 - **Album Support**: Create and schedule photo albums
 - **Video Processing**: Advanced video handling with fallback mechanisms
@@ -270,6 +313,13 @@ This project is open source. Please check the repository for license details.
 - **Simple Scheduling**: Basic post scheduling features
 
 ## 🎯 Roadmap
+
+### Recently Completed ✅
+- **Professional Image Editor**: AI-powered image editing with Pixie integration
+- **Crop Presets**: Social media optimized aspect ratios
+- **Watermark Support**: Drag-and-drop watermark positioning
+- **Text Overlays**: Advanced text editing capabilities
+- **AI Image Enhancement**: Google Gemini-powered image improvements
 
 ### Upcoming Features
 - **More Platforms**: Additional social media platform support

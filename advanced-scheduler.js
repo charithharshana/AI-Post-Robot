@@ -5,6 +5,11 @@ let selectedPosts = new Set();
 let channelsData = [];
 let currentCategory = 'all';
 
+// Image Editor Integration
+let imageEditorIntegration = null;
+
+
+
 document.addEventListener('DOMContentLoaded', function() {
   initializeAdvancedScheduler();
 });
@@ -126,13 +131,15 @@ function loadPosts() {
   }
   
   let html = '';
-  allPosts.forEach(post => {
-    const isSelected = selectedPosts.has(post.id);
+  allPosts.forEach((post, globalIndex) => {
+    // Use the id that was set in loadSavedData (format: category_index)
+    const postIdentifier = post.id;
+    const isSelected = selectedPosts.has(postIdentifier);
     const caption = post.caption || 'No caption';
     const truncatedCaption = caption.length > 100 ? caption.substring(0, 100) + '...' : caption;
-    
+
     html += `
-      <div class="post-card ${isSelected ? 'selected' : ''}" data-post-id="${post.id}">
+      <div class="post-card ${isSelected ? 'selected' : ''}" data-post-id="${postIdentifier}">
         <img src="${post.imageUrl}" alt="Post image" class="post-image" onerror="this.style.display='none'">
         <div class="post-content">
           <div class="post-caption">${truncatedCaption}</div>
@@ -186,6 +193,7 @@ function updateSelectedPostsInfo() {
   
   if (selectedPosts.size === 0) {
     infoContainer.classList.add('hidden');
+    updateEditButtonState();
     return;
   }
   
@@ -271,12 +279,29 @@ function updateSelectedPostsInfo() {
       updateCaptionCharCount();
     }
   }
+
+  // Update Edit button state
+  updateEditButtonState();
 }
 
 function getPostById(postId) {
-  const [category, index] = postId.split('_');
-  if (savedItems[category] && savedItems[category][index]) {
-    return savedItems[category][index];
+  // Handle both old format (category_index) and new format (direct post.id)
+  if (postId.includes('_')) {
+    // Old format: category_index
+    const [category, index] = postId.split('_');
+    if (savedItems[category] && savedItems[category][index]) {
+      return savedItems[category][index];
+    }
+  } else {
+    // New format: search by post.id across all categories
+    for (const category in savedItems) {
+      const posts = savedItems[category];
+      for (let i = 0; i < posts.length; i++) {
+        if (posts[i] && posts[i].id === postId) {
+          return posts[i];
+        }
+      }
+    }
   }
   return null;
 }
@@ -480,11 +505,16 @@ function setupEventListeners() {
   document.getElementById('confirmCsvImportBtn').addEventListener('click', confirmCsvImport);
   document.getElementById('cancelCsvImportBtn').addEventListener('click', hideCsvImport);
 
+
+
   // Schedule buttons
   document.getElementById('scheduleBtn').addEventListener('click', schedulePosts);
   document.getElementById('publishNowBtn').addEventListener('click', publishNow);
   document.getElementById('uploadPcBtn').addEventListener('click', uploadFromPC);
   document.getElementById('testApiBtn').addEventListener('click', testRoboPostAPI);
+
+  // Image Editor button
+  document.getElementById('editImageBtn').addEventListener('click', openImageEditor);
 
   // Links editor
   document.getElementById('addLinkBtn').addEventListener('click', addLink);
@@ -1198,6 +1228,13 @@ function showMessage(message, type = 'info') {
       messageEl.parentNode.removeChild(messageEl);
     }
   }, 5000);
+}
+
+function clearMessage() {
+  const messageEl = document.getElementById('testMessage');
+  if (messageEl && messageEl.parentNode) {
+    messageEl.parentNode.removeChild(messageEl);
+  }
 }
 
 // Helper function to manage button loading states
@@ -2195,6 +2232,119 @@ window.showPromptExample = function() {
   }
 };
 
+
+
+// Image Editor Integration Functions
+function updateEditButtonState() {
+  const editBtn = document.getElementById('editImageBtn');
+  if (!editBtn) return;
+
+  // Initialize image editor integration if not already done
+  if (!imageEditorIntegration) {
+    imageEditorIntegration = new window.ImageEditorIntegration();
+  }
+
+  const canEditResult = imageEditorIntegration.canEditImage(selectedPosts);
+
+  if (canEditResult.canEdit) {
+    editBtn.disabled = false;
+    editBtn.title = 'Edit the selected image';
+  } else {
+    editBtn.disabled = true;
+    editBtn.title = canEditResult.reason || 'Cannot edit image';
+  }
+}
+
+async function openImageEditor() {
+  if (!imageEditorIntegration) {
+    imageEditorIntegration = new window.ImageEditorIntegration();
+  }
+
+  const canEditResult = imageEditorIntegration.canEditImage(selectedPosts);
+
+  if (!canEditResult.canEdit) {
+    showMessage(`❌ ${canEditResult.reason}`, 'error');
+    return;
+  }
+
+  const post = canEditResult.post;
+
+  // Get the first selected post ID (which should be in category_index format)
+  const selectedPostId = Array.from(selectedPosts)[0];
+
+  try {
+    console.log('🔄 Opening editor for post:', {
+      selectedPostId: selectedPostId,
+      postId: post.id,
+      imageUrl: post.imageUrl
+    });
+
+    await imageEditorIntegration.openEditor(
+      selectedPostId, // Use the selected post ID (category_index format)
+      post.imageUrl,
+      async (postId, editedImageDataUrl) => {
+        // Handle saving the edited image
+        await handleEditedImageSave(postId, editedImageDataUrl);
+      }
+    );
+
+  } catch (error) {
+    console.error('Failed to open image editor:', error);
+    showMessage('❌ Failed to open image editor. Please try again.', 'error');
+  }
+}
+
+async function handleEditedImageSave(postId, editedImageDataUrl) {
+  try {
+    showMessage('💾 Saving edited image...', 'info');
+
+    // Find the post and update its image URL
+    const post = getPostById(postId);
+    if (!post) {
+      throw new Error('Post not found');
+    }
+
+    // Update the post's image URL with the edited image data
+    post.imageUrl = editedImageDataUrl;
+    post.isEdited = true; // Mark as edited
+    post.editedAt = new Date().toISOString();
+
+    // Save the updated post data
+    await savePostData();
+
+    // Refresh the posts display to show the updated image
+    await loadSavedData();
+
+    showMessage('✅ Image saved successfully!', 'success');
+
+  } catch (error) {
+    console.error('Failed to save edited image:', error);
+    showMessage('❌ Failed to save edited image. Please try again.', 'error');
+  }
+}
+
+async function savePostData() {
+  // Save the updated posts data to storage
+  const dataToSave = {
+    savedItems: savedItems,
+    categories: categories
+  };
+
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(dataToSave, () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// Make functions available globally for the image editor integration
+window.getPostById = getPostById;
+window.clearMessage = clearMessage;
+
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   // Load custom prompts first
@@ -2206,4 +2356,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRewriteButtonListeners();
   updateCaptionCharCount();
   updateTimezoneInfo();
+
+  // Initialize image editor integration
+  try {
+    imageEditorIntegration = new window.ImageEditorIntegration();
+    console.log('✅ Image Editor Integration ready');
+  } catch (error) {
+    console.warn('⚠️ Image Editor Integration not available:', error);
+  }
 });

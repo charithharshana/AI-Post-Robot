@@ -24,7 +24,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["robopost-api.js", "gemini-api.js"],
+      "resources": ["robopost-api.js", "gemini-api.js", "image-editor-module/*"],
       "matches": ["<all_urls>"]
     }
   ],
