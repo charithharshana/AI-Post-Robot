@@ -317,9 +317,10 @@ This project is open source. Please check the repository for license details.
 ### Recently Completed ✅
 - **Professional Image Editor**: AI-powered image editing with Pixie integration
 - **Crop Presets**: Social media optimized aspect ratios
-- **Watermark Support**: Drag-and-drop watermark positioning
+- **Watermark Support**: Drag-and-drop watermark positioning with center alignment
 - **Text Overlays**: Advanced text editing capabilities
 - **AI Image Enhancement**: Google Gemini-powered image improvements
+- **UI Improvements**: Streamlined watermark controls and clean interface
 
 ### Upcoming Features
 - **More Platforms**: Additional social media platform support
