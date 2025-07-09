@@ -182,6 +182,52 @@ class ImageEditorIntegration {
   }
 
   /**
+   * Load fonts for the image editor
+   * @returns {Promise<Array>} Array of font configurations for Pixie
+   */
+  async loadFonts() {
+    try {
+      // Load FontManager if not available
+      if (typeof window.FontManager === 'undefined') {
+        await this.loadFontManager();
+      }
+
+      // Load all fonts (default + custom)
+      await window.FontManager.loadAllFonts();
+
+      // Get fonts formatted for Pixie
+      const fonts = await window.FontManager.getFontsForPixie();
+
+      console.log('✅ Loaded fonts for image editor:', fonts.length);
+      return fonts;
+    } catch (error) {
+      console.error('❌ Failed to load fonts:', error);
+      // Return default fonts if custom font loading fails
+      return [
+        { family: 'Arial', src: null },
+        { family: 'Helvetica', src: null },
+        { family: 'Times New Roman', src: null },
+        { family: 'Georgia', src: null },
+        { family: 'Verdana', src: null }
+      ];
+    }
+  }
+
+  /**
+   * Load FontManager script
+   * @returns {Promise}
+   */
+  async loadFontManager() {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('image-editor-module/font-manager.js');
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
    * Open the image editor with the specified image
    */
   async openEditor(postId, imageUrl, onSaveCallback) {
@@ -766,6 +812,9 @@ class ImageEditorIntegration {
         throw new Error('Editor container disappeared during initialization');
       }
 
+      // Load fonts before creating Pixie instance
+      const fonts = await this.loadFonts();
+
       this.pixieInstance = new window.Pixie({
         selector: '#image-editor-content',
         baseUrl: chrome.runtime.getURL('image-editor-module/assets'),
@@ -784,6 +833,9 @@ class ImageEditorIntegration {
           export: {
             defaultFormat: 'jpeg',
             defaultQuality: 0.9
+          },
+          text: {
+            items: fonts
           }
         },
         onLoad: () => {

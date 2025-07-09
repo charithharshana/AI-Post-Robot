@@ -129,6 +129,100 @@
       border: 1px solid #81e6d9;
     }
 
+    /* Font Management Styles */
+    .font-upload-container {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .font-upload-input {
+      flex: 1;
+    }
+
+    .custom-fonts-list {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      background: #f9f9f9;
+    }
+
+    .font-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      background: white;
+    }
+
+    .font-item:last-child {
+      border-bottom: none;
+    }
+
+    .font-info {
+      flex: 1;
+    }
+
+    .font-name {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .font-details {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .font-preview {
+      font-size: 18px;
+      margin: 5px 0;
+      padding: 5px;
+      background: #f5f5f5;
+      border-radius: 3px;
+      border: 1px solid #ddd;
+    }
+
+    .font-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .font-actions button {
+      padding: 4px 8px;
+      font-size: 12px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .font-actions .danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .font-actions .danger:hover {
+      background: #c82333;
+    }
+
+    .loading-fonts {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+
+    .no-fonts {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+      font-style: italic;
+    }
+
+    .font-help-text {
+      margin-bottom: 20px;
+    }
+
     .api-keys-container {
       position: relative;
       display: flex;
@@ -390,6 +484,37 @@
   </div>
 
   <div class="section">
+    <h2>🔤 Font Management</h2>
+    <div class="help-text font-help-text">
+      Manage custom fonts for the image editor. Upload your own fonts to use in text elements.
+    </div>
+
+    <div class="form-group">
+      <label for="fontUpload">Upload Custom Font</label>
+      <div class="font-upload-container">
+        <input type="file" id="fontUpload" accept=".ttf,.otf,.woff,.woff2" class="font-upload-input">
+        <button type="button" id="uploadFontBtn" class="success">📤 Upload Font</button>
+      </div>
+      <div class="help-text">
+        Supported formats: TTF, OTF, WOFF, WOFF2 (Max size: 5MB)
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Custom Fonts</label>
+      <div id="customFontsList" class="custom-fonts-list">
+        <div class="loading-fonts">🔄 Loading fonts...</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <button type="button" id="clearCustomFontsBtn" class="danger">🗑️ Clear All Custom Fonts</button>
+    </div>
+
+    <div id="fontMessage" class="status-message"></div>
+  </div>
+
+  <div class="section">
     <h2>📊 Data Management</h2>
 
     <div class="form-group">
@@ -418,5 +543,6 @@
   <script src="robopost-api.js"></script>
   <script src="gemini-api.js"></script>
   <script src="options.js"></script>
+  <script src="image-editor-module/font-settings.js"></script>
 </body>
 </html>

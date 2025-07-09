@@ -36,6 +36,7 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 - **Watermark Support**: Add and position watermarks with drag-and-drop functionality
 - **AI Image Enhancement**: Google Gemini-powered image editing and generation
 - **Text Overlay**: Add and edit text elements with full customization
+- **Custom Fonts**: Upload and manage custom fonts (.ttf, .otf, .woff, .woff2) for text elements
 - **Basic Editing Tools**: Rotate, crop, resize, and adjust images
 - **Visual Selection**: Interactive selection tools with real-time feedback
 
@@ -152,7 +153,7 @@ An intelligent Chrome/Edge extension for capturing and bulk scheduling social me
 2. **Basic Editing**: Use rotate, crop, and resize tools with visual feedback
 3. **Crop Presets**: Apply social media ratios (1:1, 16:9, 9:16) instantly
 4. **Add Watermarks**: Drag and drop watermark images with free positioning
-5. **Text Elements**: Add text overlays with font, size, and color customization
+5. **Text Elements**: Add text overlays with custom fonts, size, and color customization
 6. **AI Enhancement**: Use Google Gemini for intelligent image improvements
 7. **Selection Tools**: Make precise selections with interactive feedback
 8. **Save Changes**: Apply edits and automatically update the post image
@@ -319,6 +320,7 @@ This project is open source. Please check the repository for license details.
 - **Crop Presets**: Social media optimized aspect ratios
 - **Watermark Support**: Drag-and-drop watermark positioning with center alignment
 - **Text Overlays**: Advanced text editing capabilities
+- **Custom Font Management**: Upload and use custom fonts (.ttf, .otf, .woff, .woff2) in text elements
 - **AI Image Enhancement**: Google Gemini-powered image improvements
 - **UI Improvements**: Streamlined watermark controls and clean interface
 
