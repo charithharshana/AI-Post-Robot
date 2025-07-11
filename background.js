@@ -440,7 +440,7 @@ chrome.runtime.onInstalled.addListener(() => {
     defaultDelay: 10,
     defaultChannels: '',
     autoCapture: true,
-    captionMaxLength: 280,
+    captionMaxLength: -1, // No limit - capture full captions
     robopostApiKey: '',
     enableCtrlClick: true,
     lastUsedCategory: categories[0] || 'General'

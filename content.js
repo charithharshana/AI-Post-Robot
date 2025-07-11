@@ -1,14 +1,14 @@
 // Enhanced content capture for AI Post Robot
 let captureSettings = {
   autoCapture: true,
-  captionMaxLength: 280,
+  captionMaxLength: -1, // No limit - capture full captions
   enableCtrlClick: true
 };
 
 // Load capture settings
 chrome.storage.local.get(['autoCapture', 'captionMaxLength', 'enableCtrlClick'], (result) => {
   captureSettings.autoCapture = result.autoCapture !== false;
-  captureSettings.captionMaxLength = result.captionMaxLength || 280;
+  captureSettings.captionMaxLength = result.captionMaxLength || -1; // Default to no limit
   captureSettings.enableCtrlClick = result.enableCtrlClick !== false;
 });
 
@@ -56,7 +56,7 @@ function showSimpleMessage(text) {
   }, 2000);
 }
 
-// Enhanced selection change listener with caption length limit
+// Enhanced selection change listener - no caption length limit by default
 document.addEventListener("selectionchange", () => {
   const selectedText = window.getSelection().toString().trim();
   if (selectedText) {
@@ -74,8 +74,8 @@ function processCaption(text) {
   // Remove excessive whitespace and line breaks
   let processed = text.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // Truncate if too long
-  if (processed.length > captureSettings.captionMaxLength) {
+  // Only truncate if captionMaxLength is set and > 0
+  if (captureSettings.captionMaxLength > 0 && processed.length > captureSettings.captionMaxLength) {
     processed = processed.substring(0, captureSettings.captionMaxLength - 3) + '...';
   }
 
