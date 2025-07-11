@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AI Post Robot by Charith Harshana",
-  "version": "2.0.0",
-  "description": "Intelligent social media content capture and bulk scheduling tool with RoboPost API integration. Capture text and images from Facebook and Pinterest for automated posting.",
+  "version": "2.1.0",
+  "description": "Intelligent social media content capture and bulk scheduling tool with AI Post Robot API integration and advanced AI image generation/editing. Features Google Gemini-powered AI Image+ editor, multi-image generation, professional image editing, and automated posting from Facebook and Pinterest.",
   "author": "Charith Harshana",
   "homepage_url": "https://github.com/charithharshana/AI-Post-Robot",
   "permissions": [

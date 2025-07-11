@@ -1,5 +1,5 @@
 /**
- * RoboPost API Integration Module for AI Post Robot
+ * AI Post Robot API Integration Module
  * Handles media upload and post scheduling functionality
  */
 
@@ -57,7 +57,7 @@ class RoboPostAPI {
             } else {
               console.error('API connection test failed:', response.error);
               if (response.error.includes('fetch') || response.error.includes('network')) {
-                reject(new Error('Network error: Unable to connect to RoboPost API. Please check your internet connection and try again.'));
+                reject(new Error('Network error: Unable to connect to AI Post Robot API. Please check your internet connection and try again.'));
               } else {
                 reject(new Error(`Connection failed: ${response.error}`));
               }
@@ -92,7 +92,7 @@ class RoboPostAPI {
     } catch (error) {
       console.error('API connection test failed:', error);
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Network error: Unable to connect to RoboPost API. Please check your internet connection and try again.');
+        throw new Error('Network error: Unable to connect to AI Post Robot API. Please check your internet connection and try again.');
       }
       throw new Error(`Connection failed: ${error.message}`);
     }

@@ -247,20 +247,68 @@ function loadChannelsList(channelsData, defaultChannels) {
   let html = '';
   channelsData.forEach(channel => {
     const isSelected = selectedChannelIds.includes(channel.id);
-    const platformIcon = getPlatformIcon(channel.platform);
+
+    // Enhanced platform detection
+    const detectedPlatform = detectPlatform(channel);
+    const platformIcon = getPlatformIcon(detectedPlatform);
 
     html += `
       <div class="channel-item">
         <input type="checkbox" value="${channel.id}" ${isSelected ? 'checked' : ''}>
         <div class="channel-info">
           <div class="channel-name">${platformIcon} ${channel.name || channel.username || 'Unnamed Channel'}</div>
-          <div class="channel-platform">${channel.platform} • ID: ${channel.id}</div>
+          <div class="channel-platform">${detectedPlatform} • ID: ${channel.id}</div>
         </div>
       </div>
     `;
   });
 
   channelsList.innerHTML = html;
+}
+
+function detectPlatform(channel) {
+  // Try multiple ways to detect the platform
+  if (channel.platform) {
+    return channel.platform;
+  }
+
+  // Check channel name or username for platform indicators
+  const name = (channel.name || channel.username || '').toLowerCase();
+  const url = (channel.url || '').toLowerCase();
+
+  // Platform detection based on name patterns
+  if (name.includes('facebook') || url.includes('facebook.com')) {
+    return 'Facebook';
+  }
+  if (name.includes('instagram') || url.includes('instagram.com')) {
+    return 'Instagram';
+  }
+  if (name.includes('twitter') || url.includes('twitter.com') || url.includes('x.com')) {
+    return 'Twitter';
+  }
+  if (name.includes('linkedin') || url.includes('linkedin.com')) {
+    return 'LinkedIn';
+  }
+  if (name.includes('pinterest') || url.includes('pinterest.com')) {
+    return 'Pinterest';
+  }
+  if (name.includes('youtube') || url.includes('youtube.com')) {
+    return 'YouTube';
+  }
+  if (name.includes('tiktok') || url.includes('tiktok.com')) {
+    return 'TikTok';
+  }
+  if (name.includes('threads') || url.includes('threads.net')) {
+    return 'Threads';
+  }
+
+  // Check channel type or other properties
+  if (channel.type) {
+    return channel.type;
+  }
+
+  // Default fallback
+  return 'Social Platform';
 }
 
 function getPlatformIcon(platform) {

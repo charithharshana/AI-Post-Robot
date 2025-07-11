@@ -214,11 +214,11 @@ async function testNetworkFromBackground(request, sendResponse) {
     const internetTest = await fetch('https://httpbin.org/get', { method: 'GET' });
     console.log('Background: Internet test response:', internetTest.status, internetTest.statusText);
 
-    // Test 2: RoboPost API connectivity
+    // Test 2: AI Post Robot API connectivity
     const apiUrl = `https://public-api.robopost.app/v1/channels?apikey=${request.apiKey}`;
-    console.log('Background: Testing RoboPost API:', apiUrl);
+    console.log('Background: Testing AI Post Robot API:', apiUrl);
     const apiTest = await fetch(apiUrl, { method: 'GET' });
-    console.log('Background: RoboPost API test response:', apiTest.status, apiTest.statusText);
+    console.log('Background: AI Post Robot API test response:', apiTest.status, apiTest.statusText);
 
     // Test 3: RoboPost media upload endpoint
     const uploadUrl = `https://public-api.robopost.app/v1/medias/upload?apikey=${request.apiKey}`;

@@ -181,6 +181,13 @@
       color: #718096;
       margin-top: 5px;
     }
+
+    .post-metadata {
+      font-size: 10px;
+      color: #a0aec0;
+      margin-top: 3px;
+      line-height: 1.2;
+    }
     
     .form-group {
       margin-bottom: 15px;
@@ -645,6 +652,7 @@
           <button class="btn btn-warning" id="createAlbumBtn">📁 Create Album</button>
           <button class="btn btn-info" id="csvImportBtn">📄 Import CSV</button>
           <button class="btn btn-primary" id="editImageBtn" disabled>🎨 Edit Image</button>
+          <button class="btn btn-info" id="aiImageEditorBtn">🤖 AI Image+</button>
 
           <button class="btn btn-success" id="uploadPcBtn">📁 Upload from PC</button>
           <button class="btn btn-danger" id="deletePostsBtn">🗑️ Delete Selected</button>
@@ -971,6 +979,7 @@ Example: Make this text more professional and add relevant hashtags
   <script src="robopost-api.js"></script>
   <script src="gemini-api.js"></script>
   <script src="image-editor-module/image-editor-integration.js"></script>
+  <script src="image-editor-module/ai-image-editor-module.js"></script>
 
   <script src="advanced-scheduler.js"></script>
 </body>

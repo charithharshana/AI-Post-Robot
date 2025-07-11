@@ -311,7 +311,15 @@ class ImageEditorIntegration {
                 <div id="watermark-list" class="watermark-list">
                   <!-- Watermarks will be populated here -->
                 </div>
-                <!-- Watermark controls removed - canvas has built-in delete functionality -->
+                <!-- Watermark opacity control -->
+                <div id="watermark-opacity-control" class="watermark-opacity-control" style="display: none;">
+                  <div class="control-row">
+                    <label class="control-label">Opacity:</label>
+                    <input type="range" id="watermark-opacity-slider" class="opacity-slider"
+                           min="0.1" max="1" step="0.1" value="0.7">
+                    <span id="watermark-opacity-value" class="opacity-value">70%</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div id="image-editor-content" class="image-editor-content">
@@ -578,6 +586,57 @@ class ImageEditorIntegration {
         align-items: center;
         justify-content: space-between;
         min-height: 24px;
+      }
+
+      .watermark-opacity-control {
+        margin-top: 15px;
+        padding: 10px;
+        background: #f8fafc;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+      }
+
+      .control-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #475569;
+        margin-right: 8px;
+        min-width: 50px;
+      }
+
+      .opacity-slider {
+        flex: 1;
+        margin: 0 8px;
+        height: 4px;
+        background: #e2e8f0;
+        border-radius: 2px;
+        outline: none;
+        -webkit-appearance: none;
+      }
+
+      .opacity-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        background: #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .opacity-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+      }
+
+      .opacity-value {
+        font-size: 11px;
+        color: #64748b;
+        min-width: 30px;
+        text-align: right;
       }
 
       .control-row label {
@@ -1371,6 +1430,9 @@ class ImageEditorIntegration {
     // Setup watermark controls
     this.setupWatermarkControls();
 
+    // Setup watermark opacity control
+    this.setupWatermarkOpacityControl();
+
     // Load existing watermarks
     this.loadWatermarkList();
 
@@ -1519,8 +1581,142 @@ class ImageEditorIntegration {
    * Clean up watermark control event listeners
    */
   cleanupWatermarkControlListeners() {
-    // No listeners to clean up - canvas handles everything
-    console.log('🧹 Watermark control listeners cleaned up (none needed)');
+    // Clean up opacity control listeners
+    const opacitySlider = document.getElementById('watermark-opacity-slider');
+    if (opacitySlider && this.watermarkOpacityHandler) {
+      opacitySlider.removeEventListener('input', this.watermarkOpacityHandler);
+    }
+    console.log('🧹 Watermark control listeners cleaned up');
+  }
+
+  /**
+   * Setup watermark opacity control
+   */
+  setupWatermarkOpacityControl() {
+    console.log('🔄 Setting up watermark opacity control...');
+
+    const opacitySlider = document.getElementById('watermark-opacity-slider');
+    const opacityValue = document.getElementById('watermark-opacity-value');
+    const opacityControl = document.getElementById('watermark-opacity-control');
+
+    if (!opacitySlider || !opacityValue || !opacityControl) {
+      console.error('❌ Opacity control elements not found');
+      return;
+    }
+
+    // Create bound handler for opacity changes
+    this.watermarkOpacityHandler = (e) => {
+      const opacity = parseFloat(e.target.value);
+      const percentage = Math.round(opacity * 100);
+      opacityValue.textContent = `${percentage}%`;
+
+      // Update the currently selected watermark's opacity
+      this.updateSelectedWatermarkOpacity(opacity);
+    };
+
+    // Add event listener
+    opacitySlider.addEventListener('input', this.watermarkOpacityHandler);
+
+    // Setup canvas selection listener to show/hide opacity control
+    this.setupCanvasSelectionListener();
+
+    console.log('✅ Watermark opacity control setup complete');
+  }
+
+  /**
+   * Setup canvas selection listener to detect watermark selection
+   */
+  setupCanvasSelectionListener() {
+    if (!this.pixieInstance || !this.pixieInstance.fabric) {
+      console.error('❌ Pixie instance not available for selection listener');
+      return;
+    }
+
+    const canvas = this.pixieInstance.fabric;
+
+    // Listen for selection events
+    canvas.on('selection:created', (e) => {
+      this.handleCanvasSelection(e.selected);
+    });
+
+    canvas.on('selection:updated', (e) => {
+      this.handleCanvasSelection(e.selected);
+    });
+
+    canvas.on('selection:cleared', () => {
+      this.hideWatermarkOpacityControl();
+    });
+
+    console.log('✅ Canvas selection listener setup complete');
+  }
+
+  /**
+   * Handle canvas selection to show/hide watermark opacity control
+   */
+  handleCanvasSelection(selectedObjects) {
+    if (!selectedObjects || selectedObjects.length === 0) {
+      this.hideWatermarkOpacityControl();
+      return;
+    }
+
+    // Check if any selected object is a watermark
+    const watermarkObject = selectedObjects.find(obj => obj.name === 'watermark');
+
+    if (watermarkObject) {
+      this.showWatermarkOpacityControl(watermarkObject);
+    } else {
+      this.hideWatermarkOpacityControl();
+    }
+  }
+
+  /**
+   * Show watermark opacity control and update slider value
+   */
+  showWatermarkOpacityControl(watermarkObject) {
+    const opacityControl = document.getElementById('watermark-opacity-control');
+    const opacitySlider = document.getElementById('watermark-opacity-slider');
+    const opacityValue = document.getElementById('watermark-opacity-value');
+
+    if (!opacityControl || !opacitySlider || !opacityValue) return;
+
+    // Update slider to match watermark's current opacity
+    const currentOpacity = watermarkObject.opacity || 0.7;
+    opacitySlider.value = currentOpacity;
+    opacityValue.textContent = `${Math.round(currentOpacity * 100)}%`;
+
+    // Show the control
+    opacityControl.style.display = 'block';
+
+    console.log('✅ Watermark opacity control shown for watermark with opacity:', currentOpacity);
+  }
+
+  /**
+   * Hide watermark opacity control
+   */
+  hideWatermarkOpacityControl() {
+    const opacityControl = document.getElementById('watermark-opacity-control');
+    if (opacityControl) {
+      opacityControl.style.display = 'none';
+    }
+  }
+
+  /**
+   * Update the opacity of the currently selected watermark
+   */
+  updateSelectedWatermarkOpacity(opacity) {
+    if (!this.pixieInstance || !this.pixieInstance.fabric) {
+      console.error('❌ Pixie instance not available for opacity update');
+      return;
+    }
+
+    const canvas = this.pixieInstance.fabric;
+    const activeObject = canvas.getActiveObject();
+
+    if (activeObject && activeObject.name === 'watermark') {
+      activeObject.set('opacity', opacity);
+      canvas.renderAll();
+      console.log('✅ Updated watermark opacity to:', opacity);
+    }
   }
 
   /**
@@ -1574,7 +1770,15 @@ class ImageEditorIntegration {
                   </div>
                   <input type="file" id="watermark-file-input-only" accept="image/*" style="display: none;">
                   <div id="watermark-list-only" class="watermark-list"></div>
-                  <!-- Watermark controls removed - canvas has built-in functionality -->
+                  <!-- Watermark opacity control for watermark-only mode -->
+                  <div id="watermark-opacity-control-only" class="watermark-opacity-control" style="display: none;">
+                    <div class="control-row">
+                      <label class="control-label">Opacity:</label>
+                      <input type="range" id="watermark-opacity-slider-only" class="opacity-slider"
+                             min="0.1" max="1" step="0.1" value="0.7">
+                      <span id="watermark-opacity-value-only" class="opacity-value">70%</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1794,6 +1998,10 @@ class ImageEditorIntegration {
     // Clean up watermark UI listeners
     this.cleanupWatermarkListeners();
     this.cleanupWatermarkControlListeners();
+
+    // Clean up opacity control handler reference
+    this.watermarkOpacityHandler = null;
+
     this.watermarkUISetup = false;
 
     // Remove keyboard event listener

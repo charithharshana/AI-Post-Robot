@@ -8,6 +8,44 @@ let currentCategory = 'all';
 // Image Editor Integration
 let imageEditorIntegration = null;
 
+// AI Image Editor Integration
+let aiImageEditorModule = null;
+
+// Make functions available globally for the image editor integration immediately
+// This ensures they're available even before DOM content is loaded
+window.getPostById = function(postId) {
+  // First, try to find by post.id across all categories (handles AI generated IDs and other unique IDs)
+  for (const category in savedItems) {
+    const posts = savedItems[category];
+    for (let i = 0; i < posts.length; i++) {
+      if (posts[i] && posts[i].id === postId) {
+        return posts[i];
+      }
+    }
+  }
+
+  // Fallback: Handle old format (category_index) only if it looks like the old format
+  if (postId.includes('_') && !postId.startsWith('ai_') && !postId.startsWith('pc_')) {
+    const parts = postId.split('_');
+    if (parts.length === 2) {
+      const [category, index] = parts;
+      if (savedItems[category] && savedItems[category][index]) {
+        return savedItems[category][index];
+      }
+    }
+  }
+
+  return null;
+};
+
+window.clearMessage = function() {
+  const messageContainer = document.getElementById('messageContainer');
+  if (messageContainer) {
+    messageContainer.innerHTML = '';
+    messageContainer.style.display = 'none';
+  }
+};
+
 
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -24,6 +62,9 @@ async function initializeAdvancedScheduler() {
       await window.geminiAPI.initialize();
     }
 
+    // AI Image Editor Module will be initialized on demand
+    console.log('🔄 AI Image Editor Module will be loaded when needed');
+
     // Load saved data
     await loadSavedData();
 
@@ -38,6 +79,10 @@ async function initializeAdvancedScheduler() {
 
     // Load custom presets
     await loadCustomPresets();
+
+    // Initialize button states
+    updateEditButtonState();
+    console.log('✅ Advanced Scheduler initialized successfully');
 
   } catch (error) {
     console.error('Initialization error:', error);
@@ -73,12 +118,36 @@ async function loadChannels() {
 function loadCategoryTabs() {
   const tabsContainer = document.getElementById('categoryTabs');
   let html = '<div class="filter-tab active" data-category="all">📁 All Posts</div>';
-  
+
   categories.forEach(category => {
     const count = savedItems[category] ? savedItems[category].length : 0;
-    html += `<div class="filter-tab" data-category="${category}">${category} (${count})</div>`;
+
+    // Add appropriate icons for different categories
+    let icon = '';
+    switch (category.toLowerCase()) {
+      case 'facebook':
+        icon = '📘 ';
+        break;
+      case 'pinterest':
+        icon = '📌 ';
+        break;
+      case 'my pc':
+        icon = '💻 ';
+        break;
+      case 'ai':
+        icon = '🤖 ';
+        break;
+      case 'csv import':
+        icon = '📊 ';
+        break;
+      default:
+        icon = '📂 ';
+        break;
+    }
+
+    html += `<div class="filter-tab" data-category="${category}">${icon}${category} (${count})</div>`;
   });
-  
+
   tabsContainer.innerHTML = html;
   
   // Add click listeners
@@ -95,10 +164,72 @@ function loadCategoryTabs() {
   });
 }
 
+/**
+ * Get image dimensions from data URL
+ */
+function getImageDimensions(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+    };
+    img.onerror = () => {
+      reject(new Error('Failed to load image for dimensions'));
+    };
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Get image metadata for display
+ */
+function getImageMetadata(post) {
+  const metadata = [];
+
+  // Get dimensions if available
+  if (post.dimensions) {
+    metadata.push(`${post.dimensions.width} × ${post.dimensions.height}px`);
+  }
+
+  // Get file size if available
+  if (post.fileSize) {
+    const sizeKB = Math.round(post.fileSize / 1024);
+    if (sizeKB < 1024) {
+      metadata.push(`${sizeKB} KB`);
+    } else {
+      const sizeMB = (sizeKB / 1024).toFixed(1);
+      metadata.push(`${sizeMB} MB`);
+    }
+  }
+
+  // Get file format
+  if (post.fileType) {
+    const format = post.fileType.split('/')[1]?.toUpperCase() || 'IMG';
+    metadata.push(format);
+  }
+
+  // Get timestamp
+  if (post.timestamp) {
+    const date = new Date(post.timestamp);
+    const timeStr = date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    metadata.push(timeStr);
+  }
+
+  return metadata.join(' • ');
+}
+
 function loadPosts() {
   const container = document.getElementById('postsContainer');
   let allPosts = [];
-  
+
   if (currentCategory === 'all') {
     // Get all posts from all categories
     Object.keys(savedItems).forEach(category => {
@@ -131,12 +262,15 @@ function loadPosts() {
   }
   
   let html = '';
-  allPosts.forEach((post, globalIndex) => {
+  allPosts.forEach((post) => {
     // Use the id that was set in loadSavedData (format: category_index)
     const postIdentifier = post.id;
     const isSelected = selectedPosts.has(postIdentifier);
     const caption = post.caption || 'No caption';
     const truncatedCaption = caption.length > 100 ? caption.substring(0, 100) + '...' : caption;
+
+    // Get image metadata for display
+    const metadata = getImageMetadata(post);
 
     html += `
       <div class="post-card ${isSelected ? 'selected' : ''}" data-post-id="${postIdentifier}">
@@ -144,6 +278,7 @@ function loadPosts() {
         <div class="post-content">
           <div class="post-caption">${truncatedCaption}</div>
           <div class="post-meta">${post.category}</div>
+          <div class="post-metadata">${metadata}</div>
         </div>
       </div>
     `;
@@ -225,7 +360,7 @@ function updateSelectedPostsInfo() {
     let count = 0;
     selectedPosts.forEach(postId => {
       if (count < 6) { // Show max 6 thumbnails
-        const post = getPostById(postId);
+        const post = window.getPostById(postId);
         if (post) {
           html += `<img src="${post.imageUrl}" alt="Thumb" class="album-thumb">`;
         }
@@ -248,7 +383,7 @@ function updateSelectedPostsInfo() {
   
   // Update caption and title with selected post's data
   if (selectedPosts.size > 0) {
-    const firstPost = getPostById(Array.from(selectedPosts)[0]);
+    const firstPost = window.getPostById(Array.from(selectedPosts)[0]);
     if (firstPost) {
       const captionTextarea = document.getElementById('postCaption');
       const titleInput = document.getElementById('postTitle');
@@ -284,27 +419,7 @@ function updateSelectedPostsInfo() {
   updateEditButtonState();
 }
 
-function getPostById(postId) {
-  // Handle both old format (category_index) and new format (direct post.id)
-  if (postId.includes('_')) {
-    // Old format: category_index
-    const [category, index] = postId.split('_');
-    if (savedItems[category] && savedItems[category][index]) {
-      return savedItems[category][index];
-    }
-  } else {
-    // New format: search by post.id across all categories
-    for (const category in savedItems) {
-      const posts = savedItems[category];
-      for (let i = 0; i < posts.length; i++) {
-        if (posts[i] && posts[i].id === postId) {
-          return posts[i];
-        }
-      }
-    }
-  }
-  return null;
-}
+// getPostById function is now defined globally at the top of the file
 
 function displayChannels() {
   const channelsList = document.getElementById('channelsList');
@@ -316,7 +431,9 @@ function displayChannels() {
   
   let html = '';
   channelsData.forEach(channel => {
-    const platformIcon = getPlatformIcon(channel.platform);
+    // Enhanced platform detection
+    const detectedPlatform = detectPlatform(channel);
+    const platformIcon = getPlatformIcon(detectedPlatform);
     html += `
       <div class="channel-option">
         <input type="checkbox" value="${channel.id}" id="channel_${channel.id}">
@@ -326,6 +443,51 @@ function displayChannels() {
   });
   
   channelsList.innerHTML = html;
+}
+
+function detectPlatform(channel) {
+  // Try multiple ways to detect the platform
+  if (channel.platform) {
+    return channel.platform;
+  }
+
+  // Check channel name or username for platform indicators
+  const name = (channel.name || channel.username || '').toLowerCase();
+  const url = (channel.url || '').toLowerCase();
+
+  // Platform detection based on name patterns
+  if (name.includes('facebook') || url.includes('facebook.com')) {
+    return 'Facebook';
+  }
+  if (name.includes('instagram') || url.includes('instagram.com')) {
+    return 'Instagram';
+  }
+  if (name.includes('twitter') || url.includes('twitter.com') || url.includes('x.com')) {
+    return 'Twitter';
+  }
+  if (name.includes('linkedin') || url.includes('linkedin.com')) {
+    return 'LinkedIn';
+  }
+  if (name.includes('pinterest') || url.includes('pinterest.com')) {
+    return 'Pinterest';
+  }
+  if (name.includes('youtube') || url.includes('youtube.com')) {
+    return 'YouTube';
+  }
+  if (name.includes('tiktok') || url.includes('tiktok.com')) {
+    return 'TikTok';
+  }
+  if (name.includes('threads') || url.includes('threads.net')) {
+    return 'Threads';
+  }
+
+  // Check channel type or other properties
+  if (channel.type) {
+    return channel.type;
+  }
+
+  // Default fallback
+  return 'Social Platform';
 }
 
 function getPlatformIcon(platform) {
@@ -515,6 +677,9 @@ function setupEventListeners() {
 
   // Image Editor button
   document.getElementById('editImageBtn').addEventListener('click', openImageEditor);
+
+  // AI Image Editor button
+  document.getElementById('aiImageEditorBtn').addEventListener('click', openAIImageEditor);
 
   // Links editor
   document.getElementById('addLinkBtn').addEventListener('click', addLink);
@@ -886,6 +1051,16 @@ async function uploadFromPC() {
         originalDataUrl = previewUrl; // Same for images
       }
 
+      // Get image dimensions if it's an image
+      let dimensions = null;
+      if (!file.type.startsWith('video/')) {
+        try {
+          dimensions = await getImageDimensions(originalDataUrl);
+        } catch (error) {
+          console.warn('Failed to get image dimensions:', error);
+        }
+      }
+
       // Create post object - always save to "My PC" category
       const pcCategory = 'My PC';
       const postId = Date.now().toString();
@@ -901,6 +1076,8 @@ async function uploadFromPC() {
         source: 'pc_upload',
         filename: file.name,
         fileType: file.type, // Store original file type for scheduling
+        fileSize: file.size, // Store file size
+        dimensions: dimensions, // Store image dimensions
         isVideo: file.type.startsWith('video/') // Helper flag for easy checking
       };
 
@@ -1046,7 +1223,7 @@ async function publishNow() {
     }
 
     if (publishType === 'album' && selectedPosts.size > 1) {
-      const posts = Array.from(selectedPosts).map(postId => getPostById(postId));
+      const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
       const imageUrls = posts.map(post => post.imageUrl);
 
       await window.roboPostAPI.scheduleAlbumFromCapture({
@@ -1076,7 +1253,7 @@ async function publishNow() {
 }
 
 async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
-  const posts = Array.from(selectedPosts).map(postId => getPostById(postId));
+  const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
   const imageUrls = posts.map(post => post.imageUrl);
 
   try {
@@ -1100,7 +1277,7 @@ async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
 async function scheduleIndividualPosts(channels, scheduleDateTime, interval, caption, title) {
   const startTime = new Date(scheduleDateTime);
   const intervalType = document.getElementById('intervalType').value;
-  const posts = Array.from(selectedPosts).map(postId => getPostById(postId));
+  const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
 
   for (let i = 0; i < posts.length; i++) {
     const post = posts[i];
@@ -1141,11 +1318,35 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
         title: title
       };
 
-      // If post has storageId (from PC upload), use it directly
+      // Handle storage: existing storageId or upload now if needed
       if (post.storageId) {
+        // Already uploaded (PC upload or old AI images)
         scheduleOptions.storageId = post.storageId;
-        scheduleOptions.isVideo = post.isVideo; // Pass video flag for correct API payload
+        scheduleOptions.isVideo = post.isVideo;
         console.log(`Using existing storage_id for post ${i + 1}:`, post.storageId, post.isVideo ? '(video)' : '(image)');
+      } else if (post.needsUpload && post.file) {
+        // AI generated image that needs uploading now
+        console.log(`📤 Uploading AI generated image for post ${i + 1} during scheduling...`);
+        try {
+          const uploadedStorageId = await window.roboPostAPI.uploadMedia(post.file);
+          scheduleOptions.storageId = uploadedStorageId;
+          scheduleOptions.isVideo = post.isVideo || false;
+
+          // Update the post with the new storageId
+          post.storageId = uploadedStorageId;
+          post.needsUpload = false;
+
+          console.log(`✅ AI image uploaded during scheduling, storage_id: ${uploadedStorageId}`);
+        } catch (uploadError) {
+          console.warn(`⚠️ Failed to upload AI image for post ${i + 1}:`, uploadError);
+          if (uploadError.message && uploadError.message.includes('quota')) {
+            console.log(`💾 Quota exceeded for post ${i + 1}, using image URL fallback`);
+            // Use imageUrl as fallback (RoboPost can sometimes handle data URLs)
+            scheduleOptions.imageUrl = post.imageUrl;
+          } else {
+            throw uploadError; // Re-throw other errors
+          }
+        }
       }
 
       await window.roboPostAPI.schedulePostFromCapture(scheduleOptions);
@@ -1160,15 +1361,19 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
       throw error;
     }
   }
+
+  // Save updated post data (with new storageIds from uploads)
+  await savePostData();
+  console.log('✅ Post data saved with updated storage IDs');
 }
 
-// Test RoboPost API function
+// Test AI Post Robot API function
 async function testRoboPostAPI() {
   // Set loading state
   setButtonLoading('testApiBtn', true);
 
   try {
-    showMessage('Testing RoboPost API...', 'info');
+    showMessage('Testing AI Post Robot API...', 'info');
 
     const result = await window.roboPostAPI.testScheduling();
 
@@ -1230,7 +1435,7 @@ function showMessage(message, type = 'info') {
   }, 5000);
 }
 
-function clearMessage() {
+function clearTestMessage() {
   const messageEl = document.getElementById('testMessage');
   if (messageEl && messageEl.parentNode) {
     messageEl.parentNode.removeChild(messageEl);
@@ -1725,7 +1930,7 @@ function getSelectedPostMedia() {
   // Get the first selected post (for multimodal AI)
   if (selectedPosts.size > 0) {
     const firstPostId = Array.from(selectedPosts)[0];
-    const post = getPostById(firstPostId);
+    const post = window.getPostById(firstPostId);
     if (post && post.imageUrl) {
       return {
         url: post.originalDataUrl || post.imageUrl, // Use original data for AI, fallback to preview
@@ -2183,7 +2388,7 @@ async function applyCustomPrompt() {
 
 // Debug function to show prompt structure (for development/testing)
 window.showPromptExample = function() {
-  const selectedPost = selectedPosts.size > 0 ? getPostById(Array.from(selectedPosts)[0]) : null;
+  const selectedPost = selectedPosts.size > 0 ? window.getPostById(Array.from(selectedPosts)[0]) : null;
   const sampleText = "This is a sample title text";
   const sampleInstruction = "Based on this image/video and text, create a short, engaging title in the same language as the text. Provide only one option:";
 
@@ -2237,21 +2442,34 @@ window.showPromptExample = function() {
 // Image Editor Integration Functions
 function updateEditButtonState() {
   const editBtn = document.getElementById('editImageBtn');
-  if (!editBtn) return;
+  const aiEditBtn = document.getElementById('aiImageEditorBtn');
+
+  if (!editBtn || !aiEditBtn) return;
 
   // Initialize image editor integration if not already done
   if (!imageEditorIntegration) {
     imageEditorIntegration = new window.ImageEditorIntegration();
   }
 
+  // Update regular image editor button
   const canEditResult = imageEditorIntegration.canEditImage(selectedPosts);
-
   if (canEditResult.canEdit) {
     editBtn.disabled = false;
     editBtn.title = 'Edit the selected image';
   } else {
     editBtn.disabled = true;
     editBtn.title = canEditResult.reason || 'Cannot edit image';
+  }
+
+  // AI Image+ button should ALWAYS be enabled and clickable
+  // This is critical - the button must work on first click without requiring post selection
+  aiEditBtn.disabled = false;
+
+  // Set appropriate tooltip based on selection state
+  if (selectedPosts.size === 0) {
+    aiEditBtn.title = '🤖 Create new image with AI Image+';
+  } else {
+    aiEditBtn.title = '🤖 Create/edit image with AI Image+';
   }
 }
 
@@ -2294,12 +2512,496 @@ async function openImageEditor() {
   }
 }
 
+async function openAIImageEditor() {
+  console.log('🔄 AI Image+ button clicked');
+
+  // Ensure data is loaded first
+  if (Object.keys(savedItems).length === 0) {
+    console.log('🔄 Loading data before opening AI Image Editor...');
+    await loadSavedData();
+  }
+
+  // Ensure AI Image Editor Module is properly initialized
+  if (!aiImageEditorModule) {
+    if (window.AIImageEditorModule) {
+      aiImageEditorModule = new window.AIImageEditorModule();
+      console.log('🔄 AI Image Editor Module initialized on demand');
+    } else {
+      console.error('❌ AIImageEditorModule not available');
+      showMessage('❌ AI Image Editor not available. Please refresh the page.', 'error');
+      return;
+    }
+  }
+
+  // Initialize the module if not already done
+  if (!aiImageEditorModule.isInitialized) {
+    try {
+      await aiImageEditorModule.init();
+      console.log('✅ AI Image Editor Module initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize AI Image Editor Module:', error);
+      showMessage('❌ Failed to initialize AI Image Editor. Please check your Gemini API settings.', 'error');
+      return;
+    }
+  }
+
+  const canUseResult = aiImageEditorModule.canUseAIEditor(selectedPosts);
+
+  // AI Image Editor should always work - no restrictions
+  console.log('🔄 AI Image+ can always be used:', canUseResult);
+
+  try {
+    console.log('🔄 Opening AI Image Editor...', {
+      selectedPosts: Array.from(selectedPosts),
+      mode: canUseResult.mode
+    });
+
+    await aiImageEditorModule.openAIEditor(
+      selectedPosts,
+      async (postId, generatedImageDataUrl, metadata = {}) => {
+        // Handle saving the generated/edited image with metadata
+        await handleAIGeneratedImageSave(postId, generatedImageDataUrl, metadata);
+      }
+    );
+
+  } catch (error) {
+    console.error('Failed to open AI Image Editor:', error);
+    showMessage('❌ Failed to open AI Image Editor. Please try again.', 'error');
+  }
+}
+
+/**
+ * Delete a post by its ID (used when replacing with AI generated image)
+ * Uses the same logic as deleteSelectedPosts but for a single post
+ */
+async function deletePostById(postId) {
+  try {
+    console.log('🗑️ DELETEPOSTBYID CALLED WITH:', postId);
+
+    // Get current saved items and counters (same as deleteSelectedPosts)
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['savedItems', 'counters'], resolve);
+    });
+
+    const savedItems = result.savedItems || {};
+    const counters = result.counters || { captionCount: 0, linkCount: 0 };
+    let deletedPost = null;
+
+    console.log('🔍 AVAILABLE CATEGORIES:', Object.keys(savedItems));
+    console.log('🔍 POST ID FORMAT CHECK:', {
+      postId: postId,
+      includesUnderscore: postId.includes('_'),
+      startsWithAI: postId.startsWith('ai_'),
+      startsWithPC: postId.startsWith('pc_')
+    });
+
+    // Handle old format (category_index) - this is what we get from selectedPosts
+    if (postId.includes('_') && !postId.startsWith('ai_') && !postId.startsWith('pc_')) {
+      const parts = postId.split('_');
+      console.log('🔍 SPLIT PARTS:', parts);
+
+      if (parts.length === 2) {
+        const [category, index] = parts;
+        const indexNum = parseInt(index);
+
+        console.log('🔍 LOOKING FOR:', {
+          category: category,
+          index: indexNum,
+          categoryExists: !!savedItems[category],
+          categoryLength: savedItems[category] ? savedItems[category].length : 0,
+          postExists: savedItems[category] && savedItems[category][indexNum]
+        });
+
+        if (savedItems[category] && savedItems[category][indexNum]) {
+          deletedPost = savedItems[category][indexNum];
+          console.log('🔍 FOUND POST TO DELETE:', {
+            title: deletedPost.title || deletedPost.caption,
+            id: deletedPost.id
+          });
+
+          // Update counters (same logic as deleteSelectedPosts)
+          if (deletedPost.caption && deletedPost.caption.trim()) {
+            counters.captionCount = Math.max(0, counters.captionCount - 1);
+          }
+          if (deletedPost.imageUrl) {
+            counters.linkCount = Math.max(0, counters.linkCount - 1);
+          }
+
+          // Remove the post
+          savedItems[category].splice(indexNum, 1);
+          console.log(`✅ REMOVED POST FROM ${category} CATEGORY, NEW LENGTH:`, savedItems[category].length);
+
+          // Remove empty categories (same as deleteSelectedPosts)
+          if (savedItems[category].length === 0) {
+            delete savedItems[category];
+            console.log(`🗑️ REMOVED EMPTY ${category} CATEGORY`);
+          }
+        } else {
+          console.error('❌ POST NOT FOUND AT EXPECTED LOCATION:', {
+            category: category,
+            index: indexNum,
+            categoryExists: !!savedItems[category],
+            categoryContents: savedItems[category] ? savedItems[category].map((p, i) => `${i}: ${p.title || p.caption}`) : 'N/A'
+          });
+        }
+      }
+    } else {
+      // Handle new format (post.id) - search through all categories
+      for (const category in savedItems) {
+        const posts = savedItems[category];
+        for (let i = 0; i < posts.length; i++) {
+          if (posts[i] && posts[i].id === postId) {
+            deletedPost = posts[i];
+
+            // Update counters
+            if (deletedPost.caption && deletedPost.caption.trim()) {
+              counters.captionCount = Math.max(0, counters.captionCount - 1);
+            }
+            if (deletedPost.imageUrl) {
+              counters.linkCount = Math.max(0, counters.linkCount - 1);
+            }
+
+            // Remove the post
+            posts.splice(i, 1);
+            console.log(`✅ Deleted post from ${category} category`);
+
+            // Remove empty categories
+            if (posts.length === 0) {
+              delete savedItems[category];
+              console.log(`🗑️ Removed empty ${category} category`);
+            }
+            break;
+          }
+        }
+        if (deletedPost) break;
+      }
+    }
+
+    if (!deletedPost) {
+      console.error('❌ POST NOT FOUND FOR DELETION:', postId);
+      console.log('🔍 FULL SAVEDITEM DUMP:', JSON.stringify(savedItems, null, 2));
+      return false;
+    }
+
+    // Update categories list (same as deleteSelectedPosts)
+    const categories = Object.keys(savedItems);
+    console.log('🔍 UPDATED CATEGORIES LIST:', categories);
+
+    // Save updated items, categories, and counters (same as deleteSelectedPosts)
+    console.log('💾 SAVING UPDATED DATA TO STORAGE...');
+    await new Promise(resolve => {
+      chrome.storage.local.set({ savedItems, categories, counters }, resolve);
+    });
+    console.log('✅ DATA SAVED TO STORAGE');
+
+    console.log('✅ ORIGINAL POST DELETED SUCCESSFULLY:', {
+      postId: postId,
+      postTitle: deletedPost.title || deletedPost.caption,
+      finalCategoryCount: Object.keys(savedItems).length
+    });
+
+    return true;
+
+  } catch (error) {
+    console.error('❌ Failed to delete original post:', error);
+    throw error;
+  }
+}
+
+/**
+ * Move a post from its original category to the AI category
+ */
+async function movePostToAICategory(post, originalCategory) {
+  try {
+    console.log('🔄 Moving post to AI category:', {
+      postId: post.id,
+      from: originalCategory,
+      to: 'AI'
+    });
+
+    // Get current saved data
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['savedItems', 'categories'], resolve);
+    });
+
+    const savedItems = result.savedItems || {};
+    const categories = result.categories || [];
+
+    // Find and remove post from original category
+    if (savedItems[originalCategory]) {
+      const postIndex = savedItems[originalCategory].findIndex(p => p.id === post.id);
+      if (postIndex !== -1) {
+        // Remove from original category
+        savedItems[originalCategory].splice(postIndex, 1);
+        console.log(`✅ Removed post from ${originalCategory} category`);
+
+        // Clean up empty categories
+        if (savedItems[originalCategory].length === 0) {
+          delete savedItems[originalCategory];
+          const categoryIndex = categories.indexOf(originalCategory);
+          if (categoryIndex !== -1) {
+            categories.splice(categoryIndex, 1);
+          }
+          console.log(`🗑️ Removed empty ${originalCategory} category`);
+        }
+      }
+    }
+
+    // Add to AI category
+    const aiCategory = 'AI';
+    if (!savedItems[aiCategory]) {
+      savedItems[aiCategory] = [];
+    }
+
+    // Update post category
+    post.category = aiCategory;
+
+    // Add to AI category
+    savedItems[aiCategory].push(post);
+
+    // Add AI category to categories list if not present
+    if (!categories.includes(aiCategory)) {
+      categories.push(aiCategory);
+    }
+
+    // Save updated data
+    await new Promise(resolve => {
+      chrome.storage.local.set({ savedItems, categories }, resolve);
+    });
+
+    console.log('✅ Post successfully moved to AI category');
+
+  } catch (error) {
+    console.error('❌ Failed to move post to AI category:', error);
+    throw error;
+  }
+}
+
+async function handleAIGeneratedImageSave(postId, generatedImageDataUrl, metadata = {}) {
+  try {
+    console.log('🔄 Saving AI generated image...', {
+      postId: postId,
+      hasImageData: !!generatedImageDataUrl,
+      isPermanent: metadata.isPermanent,
+      deleteOriginalPostId: metadata.deleteOriginalPostId
+    });
+
+    let dataUrl, storageId, file, fileName, needsUpload = false;
+
+    // Check if this is from AI editor with local storage approach
+    if (metadata.isPermanent) {
+      // Use the data from AI editor (saved locally, will upload during scheduling)
+      dataUrl = generatedImageDataUrl;
+      storageId = metadata.storageId; // Will be null for new approach
+      file = metadata.file;
+      fileName = metadata.fileName;
+      needsUpload = metadata.needsUpload || false;
+
+      if (needsUpload) {
+        console.log('💾 Using local storage from AI editor (will upload during scheduling)');
+      } else {
+        console.log('✅ Using permanent storage from AI editor, storage_id:', storageId);
+      }
+    } else {
+      // Legacy path: save locally (no upload)
+      console.log('🔄 Saving image locally (will upload during scheduling)...');
+
+      // Convert data URL to blob for saving
+      const response = await fetch(generatedImageDataUrl);
+      const blob = await response.blob();
+
+      // Create a file name
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      fileName = `ai-generated-${timestamp}.png`;
+
+      // Create a File object
+      file = new File([blob], fileName, { type: 'image/png' });
+
+      // No upload here - save locally and upload during scheduling
+      console.log('💾 AI image saved locally (will upload to RoboPost during scheduling)');
+      storageId = null;
+      needsUpload = true;
+
+      // Generate data URL for preview
+      dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Handle delete original post request
+    let originalDeleted = false;
+    if (metadata.deleteOriginalPostId) {
+      console.log('🗑️ ATTEMPTING TO DELETE ORIGINAL POST:', metadata.deleteOriginalPostId);
+      console.log('🔍 Current savedItems before deletion:', Object.keys(savedItems).map(cat => `${cat}: ${savedItems[cat].length} posts`));
+
+      originalDeleted = await deletePostById(metadata.deleteOriginalPostId);
+
+      if (originalDeleted) {
+        console.log('✅ ORIGINAL POST DELETED SUCCESSFULLY');
+        // Force reload the data to ensure UI reflects the deletion
+        const reloadResult = await new Promise(resolve => {
+          chrome.storage.local.get(['savedItems', 'categories'], resolve);
+        });
+        savedItems = reloadResult.savedItems || {};
+        categories = reloadResult.categories || [];
+        console.log('🔍 Current savedItems after deletion:', Object.keys(savedItems).map(cat => `${cat}: ${savedItems[cat].length} posts`));
+      } else {
+        console.error('❌ FAILED TO DELETE ORIGINAL POST');
+      }
+    }
+
+    // Always create new post in AI category (no more overriding)
+    {
+      // Create new post with AI generated image
+      console.log('🆕 Creating new post with AI generated image');
+      const title = metadata.title || 'AI Generated Image';
+      const caption = metadata.caption || 'Generated with AI Image Editor';
+      const suffix = metadata.total > 1 ? ` (${metadata.index}/${metadata.total})` : '';
+
+      // Get image dimensions for AI generated image
+      let dimensions = null;
+      try {
+        dimensions = await getImageDimensions(dataUrl);
+      } catch (error) {
+        console.warn('Failed to get AI image dimensions:', error);
+      }
+
+      // Determine category - use "AI" for AI-generated images
+      const aiCategory = currentCategory === 'all' ? 'AI' : currentCategory;
+
+      const newPost = {
+        id: `ai_${Date.now()}_${metadata.index || 1}`,
+        title: title + suffix,
+        caption: caption,
+        imageUrl: dataUrl,
+        originalDataUrl: dataUrl,
+        storageId: storageId, // null for new approach
+        file: file,
+        fileName: fileName,
+        category: aiCategory,
+        isVideo: false,
+        timestamp: Date.now(), // Use timestamp for consistency
+        source: 'ai_generated',
+        fileType: 'image/png',
+        fileSize: file ? file.size : null, // Store file size if available
+        dimensions: dimensions, // Store image dimensions
+        needsUpload: needsUpload // Flag for scheduling upload
+      };
+
+      // Add to savedItems array
+      if (!savedItems[newPost.category]) {
+        savedItems[newPost.category] = [];
+      }
+      savedItems[newPost.category].push(newPost);
+
+      // Update categories array
+      if (!categories.includes(newPost.category)) {
+        categories.push(newPost.category);
+      }
+
+      // Save updated data to storage (handle quota gracefully)
+      try {
+        console.log('💾 Saving AI generated post to storage:', {
+          postId: newPost.id,
+          category: newPost.category,
+          title: newPost.title,
+          hasLargeImage: newPost.imageUrl?.length > 100000
+        });
+        await savePostData();
+        console.log('✅ AI generated post saved to storage successfully');
+      } catch (storageError) {
+        console.error('❌ Storage error when saving AI generated post:', storageError);
+
+        // If quota exceeded, try to save with minimal data
+        if (storageError.message && storageError.message.includes('quota')) {
+          try {
+            console.log('🔄 Attempting to save with minimal data due to quota...');
+
+            // Remove large data URLs but keep essential info
+            const minimalPost = { ...newPost };
+            if (minimalPost.imageUrl?.startsWith('data:')) {
+              minimalPost.imageUrl = null; // Will use storageId for display
+            }
+            if (minimalPost.originalDataUrl) {
+              minimalPost.originalDataUrl = null;
+            }
+
+            // Replace the post in savedItems
+            const categoryPosts = savedItems[newPost.category];
+            const postIndex = categoryPosts.findIndex(p => p.id === newPost.id);
+            if (postIndex !== -1) {
+              categoryPosts[postIndex] = minimalPost;
+            }
+
+            await savePostData();
+            console.log('✅ Minimal post data saved successfully after quota cleanup');
+
+            showMessage(`⚠️ Storage limit reached. Post ${metadata.index || ''}/${metadata.total || ''} saved with reduced data.`, 'warning');
+          } catch (minimalSaveError) {
+            console.error('❌ Failed to save even minimal data:', minimalSaveError);
+            // Continue without failing - post is still created in memory
+          }
+        }
+      }
+
+      // Force complete UI refresh to reflect deletion and new post
+      console.log('🔄 FORCING COMPLETE UI REFRESH...');
+      await loadSavedData(); // This reloads categories, posts, and stats
+      loadCategoryTabs(); // Force reload category tabs with updated counts
+      loadPosts(); // Force reload posts display
+      updateStats(); // Force update statistics
+      console.log('✅ UI REFRESH COMPLETE');
+
+      let baseMessage;
+      if (originalDeleted) {
+        baseMessage = metadata.total > 1
+          ? `Original deleted & Post ${metadata.index}/${metadata.total} created: ${title}`
+          : 'Original post deleted & new AI post created!';
+      } else {
+        baseMessage = metadata.total > 1
+          ? `Post ${metadata.index}/${metadata.total} created: ${title}`
+          : 'New AI post created (original kept)!';
+      }
+
+      const message = needsUpload
+        ? `✅ ${baseMessage} (Will upload to cloud during scheduling)`
+        : `✅ ${baseMessage}`;
+      showMessage(message, 'success');
+
+      console.log('✅ New post created with AI generated image:', newPost.id);
+    }
+
+    // Clear any existing messages after a delay
+    setTimeout(() => {
+      if (window.clearMessage && typeof window.clearMessage === 'function') {
+        window.clearMessage();
+      }
+    }, 3000);
+
+  } catch (error) {
+    console.error('❌ Failed to save AI generated image:', error);
+
+    // Handle quota errors gracefully
+    if (error.message && error.message.includes('quota')) {
+      const message = metadata.total > 1
+        ? `⚠️ Quota limit reached. Post ${metadata.index}/${metadata.total} saved locally (image may not sync to cloud)`
+        : '⚠️ Quota limit reached. Image saved locally (may not sync to cloud)';
+      showMessage(message, 'warning');
+    } else {
+      showMessage(`❌ Failed to save AI generated image: ${error.message}`, 'error');
+    }
+  }
+}
+
 async function handleEditedImageSave(postId, editedImageDataUrl) {
   try {
     showMessage('💾 Saving edited image...', 'info');
 
     // Find the post and update its image URL
-    const post = getPostById(postId);
+    const post = window.getPostById(postId);
     if (!post) {
       throw new Error('Post not found');
     }
@@ -2324,31 +3026,143 @@ async function handleEditedImageSave(postId, editedImageDataUrl) {
 }
 
 async function savePostData() {
-  // Save the updated posts data to storage
+  // Save the updated posts data to storage with quota management
   const dataToSave = {
     savedItems: savedItems,
     categories: categories
   };
 
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.set(dataToSave, () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else {
-        resolve();
-      }
-    });
+  return new Promise(async (resolve, reject) => {
+    try {
+      // First, try to save normally
+      chrome.storage.local.set(dataToSave, async () => {
+        if (chrome.runtime.lastError) {
+          // Check if it's a quota error
+          if (chrome.runtime.lastError.message && chrome.runtime.lastError.message.includes('quota')) {
+            console.warn('⚠️ Storage quota exceeded, attempting cleanup...');
+
+            try {
+              // Attempt to free up space and retry
+              await handleStorageQuotaExceeded();
+
+              // Retry saving after cleanup
+              chrome.storage.local.set(dataToSave, () => {
+                if (chrome.runtime.lastError) {
+                  reject(chrome.runtime.lastError);
+                } else {
+                  console.log('✅ Data saved successfully after cleanup');
+                  resolve();
+                }
+              });
+            } catch (cleanupError) {
+              console.error('❌ Failed to cleanup storage:', cleanupError);
+              reject(chrome.runtime.lastError);
+            }
+          } else {
+            reject(chrome.runtime.lastError);
+          }
+        } else {
+          resolve();
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
-// Make functions available globally for the image editor integration
-window.getPostById = getPostById;
-window.clearMessage = clearMessage;
+/**
+ * Handle storage quota exceeded by cleaning up old data
+ */
+async function handleStorageQuotaExceeded() {
+  console.log('🧹 Starting storage cleanup due to quota exceeded...');
+
+  try {
+    // Get current storage usage
+    const storageInfo = await new Promise(resolve => {
+      chrome.storage.local.getBytesInUse(null, resolve);
+    });
+    console.log(`📊 Current storage usage: ${storageInfo} bytes`);
+
+    // Get all data to analyze
+    const allData = await new Promise(resolve => {
+      chrome.storage.local.get(null, resolve);
+    });
+
+    let cleanedUp = false;
+
+    // Strategy 1: Remove old AI generated images that are already uploaded
+    if (allData.savedItems) {
+      for (const category in allData.savedItems) {
+        const posts = allData.savedItems[category];
+        for (let i = posts.length - 1; i >= 0; i--) {
+          const post = posts[i];
+
+          // Remove posts that have storageId (already uploaded) and are AI generated
+          if (post.source === 'ai_generated' && post.storageId && !post.needsUpload) {
+            // Keep only essential data, remove large data URLs
+            if (post.originalDataUrl || post.imageUrl?.startsWith('data:')) {
+              console.log(`🗑️ Cleaning up uploaded AI image: ${post.fileName || 'unnamed'}`);
+              post.originalDataUrl = null;
+              if (post.imageUrl?.startsWith('data:')) {
+                post.imageUrl = null; // Will use storageId for display
+              }
+              cleanedUp = true;
+            }
+          }
+
+          // Remove very old posts (older than 30 days) that are AI generated
+          if (post.source === 'ai_generated' && post.createdAt) {
+            const postDate = new Date(post.createdAt);
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            if (postDate < thirtyDaysAgo) {
+              console.log(`🗑️ Removing old AI generated post: ${post.fileName || 'unnamed'}`);
+              posts.splice(i, 1);
+              cleanedUp = true;
+            }
+          }
+        }
+      }
+    }
+
+    // Strategy 2: Clean up other unnecessary data
+    const keysToClean = ['tempData', 'cachedImages', 'oldLogs'];
+    for (const key of keysToClean) {
+      if (allData[key]) {
+        console.log(`🗑️ Removing ${key} from storage`);
+        await new Promise(resolve => {
+          chrome.storage.local.remove([key], resolve);
+        });
+        cleanedUp = true;
+      }
+    }
+
+    if (cleanedUp) {
+      // Save the cleaned data
+      await new Promise(resolve => {
+        chrome.storage.local.set({ savedItems: allData.savedItems, categories: allData.categories }, resolve);
+      });
+
+      const newStorageInfo = await new Promise(resolve => {
+        chrome.storage.local.getBytesInUse(null, resolve);
+      });
+      console.log(`✅ Storage cleanup completed. Usage: ${storageInfo} → ${newStorageInfo} bytes`);
+    } else {
+      console.log('ℹ️ No cleanup was possible');
+    }
+
+  } catch (error) {
+    console.error('❌ Storage cleanup failed:', error);
+    throw error;
+  }
+}
+
+// Global functions are now defined at the top of the file
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load custom prompts first
-  await window.loadCustomPrompts();
+  // Load custom presets first
+  await loadCustomPresets();
 
   // Load saved data (posts) - this replaces the undefined loadCapturedPosts
   await loadSavedData();
@@ -2364,4 +3178,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (error) {
     console.warn('⚠️ Image Editor Integration not available:', error);
   }
+
+  // Initialize AI image editor module (will be initialized on demand)
+  console.log('🔄 AI Image Editor Module will be initialized when needed');
 });
