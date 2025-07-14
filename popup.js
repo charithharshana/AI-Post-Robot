@@ -142,6 +142,7 @@ function updateCounts() {
         <strong>${counters.linkCount}</strong>
       </div>
     `;
+
   });
 }
 
@@ -162,13 +163,15 @@ function exportAll(category) {
     }
 
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Image URL,Caption\n";
+    csvContent += "Image URL,Caption,Type\n";
     items.forEach(item => {
       // Remove line breaks and commas from the caption
       const cleanedCaption = item.caption
         ? item.caption.replace(/[\n\r]+/g, ' ').replace(/,/g, ' ')
         : "";
-      csvContent += `${item.imageUrl},${cleanedCaption}\n`;
+      const imageUrl = item.imageUrl || '[TEXT POST]';
+      const postType = item.isTextOnly ? 'TEXT' : 'MEDIA';
+      csvContent += `${imageUrl},${cleanedCaption},${postType}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
@@ -279,3 +282,4 @@ function removeCategory(category) {
 function getTotalCount(savedItems) {
   return Object.values(savedItems).reduce((sum, list) => sum + list.length, 0);
 }
+

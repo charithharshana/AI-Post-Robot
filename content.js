@@ -14,7 +14,8 @@ chrome.storage.local.get(['autoCapture', 'captionMaxLength', 'enableCtrlClick'],
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "showSavedMessage") {
-    showSimpleMessage(`✅ Content Captured! Total: ${request.count} | Captions: ${request.textCount} | Links: ${request.linkCount}`);
+    const message = request.message || `✅ Content Captured! Total: ${request.count} | Captions: ${request.textCount} | Links: ${request.linkCount}`;
+    showSimpleMessage(message);
   } else if (request.action === "updateCaptureSettings") {
     captureSettings = { ...captureSettings, ...request.settings };
   } else if (request.action === "updateQuickCaptureSettings") {

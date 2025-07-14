@@ -503,6 +503,7 @@ function updateContextMenuPatterns(urls) {
 }
 
 function createContextMenu() {
+  // Image context menu
   chrome.contextMenus.create({
     id: "saveSocialImage",
     title: "Save image link and caption",
@@ -513,12 +514,36 @@ function createContextMenu() {
     ]
   });
 
+  // Text selection context menu
+  chrome.contextMenus.create({
+    id: "saveTextPost",
+    title: "Save as text post",
+    contexts: ["selection"],
+    documentUrlPatterns: [
+      "*://*.facebook.com/*",
+      "*://*.pinterest.com/*"
+    ]
+  });
+
   categories.forEach(category => {
+    // Image submenu items
     chrome.contextMenus.create({
       id: `save_${category}`,
       parentId: "saveSocialImage",
       title: category,
       contexts: ["image"],
+      documentUrlPatterns: [
+        "*://*.facebook.com/*",
+        "*://*.pinterest.com/*"
+      ]
+    });
+
+    // Text post submenu items
+    chrome.contextMenus.create({
+      id: `text_${category}`,
+      parentId: "saveTextPost",
+      title: category,
+      contexts: ["selection"],
       documentUrlPatterns: [
         "*://*.facebook.com/*",
         "*://*.pinterest.com/*"
@@ -530,6 +555,8 @@ function createContextMenu() {
 function addCategory(newCategory) {
   if (!categories.includes(newCategory)) {
     categories.push(newCategory);
+
+    // Add image context menu item
     chrome.contextMenus.create({
       id: `save_${newCategory}`,
       parentId: "saveSocialImage",
@@ -540,12 +567,26 @@ function addCategory(newCategory) {
         "*://*.pinterest.com/*"
       ]
     });
+
+    // Add text post context menu item
+    chrome.contextMenus.create({
+      id: `text_${newCategory}`,
+      parentId: "saveTextPost",
+      title: newCategory,
+      contexts: ["selection"],
+      documentUrlPatterns: [
+        "*://*.facebook.com/*",
+        "*://*.pinterest.com/*"
+      ]
+    });
+
     chrome.storage.local.set({ categories: categories });
   }
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId.startsWith("save_")) {
+    // Handle image posts
     const category = info.menuItemId.split("_")[1];
     const imageUrl = info.srcUrl;
     // Clean the caption when saving
@@ -578,6 +619,70 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         });
       });
     });
+  } else if (info.menuItemId.startsWith("text_")) {
+    // Handle text posts
+    const category = info.menuItemId.split("_")[1];
+    const textContent = info.selectionText || selectedText;
+
+    if (!textContent || !textContent.trim()) {
+      chrome.tabs.sendMessage(tab.id, {
+        action: "showSavedMessage",
+        count: 0,
+        textCount: 0,
+        linkCount: 0,
+        message: "❌ No text selected"
+      });
+      return;
+    }
+
+    chrome.storage.local.get(["savedItems", "counters", "categories"], (result) => {
+      const savedItems = result.savedItems || {};
+      const counters = result.counters || { captionCount: 0, linkCount: 0 };
+      const categories = result.categories || [];
+
+      // Create text post object
+      const textPost = {
+        id: `text_${Date.now()}`,
+        title: textContent.substring(0, 50) + (textContent.length > 50 ? '...' : ''),
+        caption: textContent.trim(),
+        imageUrl: null, // No image for text posts
+        isTextOnly: true, // Flag to identify text-only posts
+        category: category,
+        timestamp: Date.now(),
+        source: 'text_selection',
+        fileType: 'text/plain'
+      };
+
+      // Add category if it doesn't exist
+      if (!categories.includes(category)) {
+        categories.push(category);
+      }
+
+      // Add to saved items
+      if (!savedItems[category]) savedItems[category] = [];
+      savedItems[category].push(textPost);
+
+      // Update counters
+      counters.captionCount++;
+
+      // Store the last used category for Ctrl+click feature
+      chrome.storage.local.set({
+        savedItems,
+        counters,
+        categories,
+        lastUsedCategory: category
+      }, () => {
+        updateBadgeText(savedItems);
+        const totalCount = getTotalCount(savedItems);
+        chrome.tabs.sendMessage(tab.id, {
+          action: "showSavedMessage",
+          count: totalCount,
+          textCount: counters.captionCount,
+          linkCount: counters.linkCount,
+          message: `✅ Text post saved to "${category}"`
+        });
+      });
+    });
   }
 });
 
@@ -596,5 +701,6 @@ function getTotalCount(savedItems) {
 
 function removeCategory(category) {
   chrome.contextMenus.remove(`save_${category}`);
+  chrome.contextMenus.remove(`text_${category}`);
   categories = categories.filter(cat => cat !== category);
 }

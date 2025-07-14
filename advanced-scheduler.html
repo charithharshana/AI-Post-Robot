@@ -152,7 +152,46 @@
       border-color: #667eea;
       background: #f0f4ff;
     }
-    
+
+    /* Text-only post styles */
+    .text-only-post {
+      border-color: #38a169 !important;
+      background: #f0fff4 !important;
+    }
+
+    .text-only-post:hover {
+      border-color: #2f855a !important;
+      background: #e6fffa !important;
+    }
+
+    .text-only-post.selected {
+      border-color: #2f855a !important;
+      background: #c6f6d5 !important;
+    }
+
+    .text-post-icon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 120px;
+      background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+      color: white;
+      text-align: center;
+    }
+
+    .text-icon {
+      font-size: 32px;
+      margin-bottom: 5px;
+    }
+
+    .text-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      opacity: 0.9;
+    }
+
     .post-image {
       width: 100%;
       height: 120px;
@@ -653,6 +692,9 @@
           <button class="btn btn-info" id="csvImportBtn">📄 Import CSV</button>
           <button class="btn btn-primary" id="editImageBtn" disabled>🎨 Edit Image</button>
           <button class="btn btn-info" id="aiImageEditorBtn">🤖 AI Image+</button>
+
+          <div style="border-left: 1px solid #e2e8f0; height: 30px; margin: 0 5px;"></div>
+          <button class="btn btn-secondary" id="filterTextOnlyBtn" title="Show only text posts">📝 Text Only</button>
 
           <button class="btn btn-success" id="uploadPcBtn">📁 Upload from PC</button>
           <button class="btn btn-danger" id="deletePostsBtn">🗑️ Delete Selected</button>

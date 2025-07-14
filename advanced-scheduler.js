@@ -4,6 +4,7 @@ let categories = [];
 let selectedPosts = new Set();
 let channelsData = [];
 let currentCategory = 'all';
+let showTextOnlyFilter = false;
 
 // Image Editor Integration
 let imageEditorIntegration = null;
@@ -140,6 +141,9 @@ function loadCategoryTabs() {
       case 'csv import':
         icon = '📊 ';
         break;
+      case 'text posts':
+        icon = '📝 ';
+        break;
       default:
         icon = '📂 ';
         break;
@@ -189,29 +193,40 @@ function getImageDimensions(dataUrl) {
 function getImageMetadata(post) {
   const metadata = [];
 
-  // Get dimensions if available
-  if (post.dimensions) {
-    metadata.push(`${post.dimensions.width} × ${post.dimensions.height}px`);
-  }
+  // Handle text-only posts
+  if (post.isTextOnly) {
+    metadata.push('📝 TEXT POST');
 
-  // Get file size if available
-  if (post.fileSize) {
-    const sizeKB = Math.round(post.fileSize / 1024);
-    if (sizeKB < 1024) {
-      metadata.push(`${sizeKB} KB`);
-    } else {
-      const sizeMB = (sizeKB / 1024).toFixed(1);
-      metadata.push(`${sizeMB} MB`);
+    // Add character count for text posts
+    if (post.caption) {
+      const charCount = post.caption.length;
+      metadata.push(`${charCount} chars`);
+    }
+  } else {
+    // Get dimensions if available
+    if (post.dimensions) {
+      metadata.push(`${post.dimensions.width} × ${post.dimensions.height}px`);
+    }
+
+    // Get file size if available
+    if (post.fileSize) {
+      const sizeKB = Math.round(post.fileSize / 1024);
+      if (sizeKB < 1024) {
+        metadata.push(`${sizeKB} KB`);
+      } else {
+        const sizeMB = (sizeKB / 1024).toFixed(1);
+        metadata.push(`${sizeMB} MB`);
+      }
+    }
+
+    // Get file format
+    if (post.fileType) {
+      const format = post.fileType.split('/')[1]?.toUpperCase() || 'IMG';
+      metadata.push(format);
     }
   }
 
-  // Get file format
-  if (post.fileType) {
-    const format = post.fileType.split('/')[1]?.toUpperCase() || 'IMG';
-    metadata.push(format);
-  }
-
-  // Get timestamp
+  // Get timestamp (for both text and media posts)
   if (post.timestamp) {
     const date = new Date(post.timestamp);
     const timeStr = date.toLocaleString('en-US', {
@@ -255,9 +270,17 @@ function loadPosts() {
       });
     }
   }
-  
+
+  // Apply text-only filter if enabled
+  if (showTextOnlyFilter) {
+    allPosts = allPosts.filter(post => post.isTextOnly === true);
+  }
+
   if (allPosts.length === 0) {
-    container.innerHTML = '<div class="empty-state">📭 No posts found in this category</div>';
+    const emptyMessage = showTextOnlyFilter
+      ? '📝 No text-only posts found in this category'
+      : '📭 No posts found in this category';
+    container.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
     return;
   }
   
@@ -272,16 +295,33 @@ function loadPosts() {
     // Get image metadata for display
     const metadata = getImageMetadata(post);
 
-    html += `
-      <div class="post-card ${isSelected ? 'selected' : ''}" data-post-id="${postIdentifier}">
-        <img src="${post.imageUrl}" alt="Post image" class="post-image" onerror="this.style.display='none'">
-        <div class="post-content">
-          <div class="post-caption">${truncatedCaption}</div>
-          <div class="post-meta">${post.category}</div>
-          <div class="post-metadata">${metadata}</div>
+    // Handle text-only posts differently
+    if (post.isTextOnly) {
+      html += `
+        <div class="post-card text-only-post ${isSelected ? 'selected' : ''}" data-post-id="${postIdentifier}">
+          <div class="text-post-icon">
+            <div class="text-icon">📝</div>
+            <div class="text-label">TEXT POST</div>
+          </div>
+          <div class="post-content">
+            <div class="post-caption">${truncatedCaption}</div>
+            <div class="post-meta">${post.category}</div>
+            <div class="post-metadata">${metadata}</div>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      html += `
+        <div class="post-card ${isSelected ? 'selected' : ''}" data-post-id="${postIdentifier}">
+          <img src="${post.imageUrl}" alt="Post image" class="post-image" onerror="this.style.display='none'">
+          <div class="post-content">
+            <div class="post-caption">${truncatedCaption}</div>
+            <div class="post-meta">${post.category}</div>
+            <div class="post-metadata">${metadata}</div>
+          </div>
+        </div>
+      `;
+    }
   });
   
   container.innerHTML = html;
@@ -659,6 +699,7 @@ function setupEventListeners() {
   document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
   document.getElementById('createAlbumBtn').addEventListener('click', createAlbum);
   document.getElementById('deletePostsBtn').addEventListener('click', deleteSelectedPosts);
+  document.getElementById('filterTextOnlyBtn').addEventListener('click', toggleTextOnlyFilter);
 
   // CSV Import buttons
   document.getElementById('csvImportBtn').addEventListener('click', showCsvImport);
@@ -1315,11 +1356,14 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
         caption: caption || post.caption,
         channelIds: channels,
         scheduleAt: scheduleTime.toISOString(),
-        title: title
+        title: title,
+        isTextOnly: post.isTextOnly || false
       };
 
-      // Handle storage: existing storageId or upload now if needed
-      if (post.storageId) {
+      // Handle storage: existing storageId or upload now if needed (skip for text-only posts)
+      if (post.isTextOnly) {
+        console.log(`Scheduling text-only post ${i + 1} (no media)`);
+      } else if (post.storageId) {
         // Already uploaded (PC upload or old AI images)
         scheduleOptions.storageId = post.storageId;
         scheduleOptions.isVideo = post.isVideo;
@@ -3182,3 +3226,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize AI image editor module (will be initialized on demand)
   console.log('🔄 AI Image Editor Module will be initialized when needed');
 });
+
+// Text-only filter functionality
+function toggleTextOnlyFilter() {
+  const button = document.getElementById('filterTextOnlyBtn');
+  showTextOnlyFilter = !showTextOnlyFilter;
+
+  if (showTextOnlyFilter) {
+    button.classList.remove('btn-secondary');
+    button.classList.add('btn-success');
+    button.textContent = '📝 Text Only ✓';
+    button.title = 'Show all posts';
+  } else {
+    button.classList.remove('btn-success');
+    button.classList.add('btn-secondary');
+    button.textContent = '📝 Text Only';
+    button.title = 'Show only text posts';
+  }
+
+  // Reload posts with filter applied
+  loadPosts();
+}

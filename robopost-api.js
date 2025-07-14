@@ -622,25 +622,14 @@ class RoboPostAPI {
       title,
       storageId, // Add support for pre-uploaded media
       isVideo = false, // Flag to indicate if this is a video file
+      isTextOnly = false, // Flag to indicate if this is a text-only post
       platformSettings = {}
     } = options;
 
     try {
       console.log('🔄 Starting post scheduling...');
 
-      let mediaStorageId;
-
-      // Step 1: Use existing storageId or upload media
-      if (storageId) {
-        console.log('✅ Using existing storage_id:', storageId);
-        mediaStorageId = storageId;
-      } else {
-        // Upload media from URL (like Python upload_image_to_robopost)
-        mediaStorageId = await this.uploadMediaFromUrl(imageUrl);
-        console.log('✅ Media uploaded, storage_id:', mediaStorageId);
-      }
-
-      // Step 2: Create payload with correct media field based on type
+      // Step 1: Create base payload
       const payload = {
         text: caption || '',
         channel_ids: channelIds,
@@ -648,16 +637,35 @@ class RoboPostAPI {
         is_draft: false
       };
 
-      // Determine if it's a video or image
-      // Use the isVideo flag if provided (for PC uploads), otherwise detect from URL
-      const isVideoFile = isVideo || this.isVideoUrl(imageUrl);
+      // Step 2: Handle media for non-text-only posts
+      if (!isTextOnly) {
+        let mediaStorageId;
 
-      if (isVideoFile) {
-        payload.video_object_id = mediaStorageId;
-        console.log('📹 Using video_object_id for video content');
+        // Use existing storageId or upload media
+        if (storageId) {
+          console.log('✅ Using existing storage_id:', storageId);
+          mediaStorageId = storageId;
+        } else if (imageUrl) {
+          // Upload media from URL (like Python upload_image_to_robopost)
+          mediaStorageId = await this.uploadMediaFromUrl(imageUrl);
+          console.log('✅ Media uploaded, storage_id:', mediaStorageId);
+        }
+
+        // Add media fields to payload if we have media
+        if (mediaStorageId) {
+          // Determine if it's a video or image
+          const isVideoFile = isVideo || this.isVideoUrl(imageUrl);
+
+          if (isVideoFile) {
+            payload.video_object_id = mediaStorageId;
+            console.log('📹 Using video_object_id for video content');
+          } else {
+            payload.image_object_ids = [mediaStorageId];
+            console.log('🖼️ Using image_object_ids for image content');
+          }
+        }
       } else {
-        payload.image_object_ids = [mediaStorageId];
-        console.log('🖼️ Using image_object_ids for image content');
+        console.log('📝 Scheduling text-only post (no media)');
       }
 
       // Only add YouTube settings if title provided

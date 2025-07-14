@@ -681,13 +681,14 @@ class AIImageEditorModule {
                     </div>
                     <div class="parameters-content">
                       <div class="parameter-categories">
+                        <!-- Clean parameter structure without fake resolution claims -->
                         <div class="parameter-category">
                           <div class="category-header" data-category="composition">
                             <span class="category-icon">📐</span>
                             <span class="category-title">Composition & Framing</span>
                             <span class="category-toggle">▼</span>
                           </div>
-                          <div class="category-content" data-category="composition">
+                          <div class="category-content" data-category="composition" style="display: none;">
                             <div class="parameter-group">
                               <div class="group-title">Aspect Ratio / Orientation</div>
                               <div class="parameter-buttons">
@@ -728,6 +729,42 @@ class AIImageEditorModule {
                           </div>
                         </div>
 
+                        <!-- MEDIUM PRIORITY: Lighting -->
+                        <div class="parameter-category">
+                          <div class="category-header" data-category="lighting">
+                            <span class="category-icon">💡</span>
+                            <span class="category-title">Lighting & Atmosphere</span>
+                            <span class="category-toggle">▼</span>
+                          </div>
+                          <div class="category-content" data-category="lighting" style="display: none;">
+                            <div class="parameter-group">
+                              <div class="group-title">Lighting Style & Quality</div>
+                              <div class="parameter-buttons">
+                                <button class="param-btn" data-param="cinematic lighting">Cinematic</button>
+                                <button class="param-btn" data-param="studio lighting">Studio</button>
+                                <button class="param-btn" data-param="natural lighting">Natural</button>
+                                <button class="param-btn" data-param="golden hour lighting">Golden Hour</button>
+                                <button class="param-btn" data-param="soft light">Soft</button>
+                                <button class="param-btn" data-param="dramatic lighting">Dramatic</button>
+                                <button class="param-btn" data-param="volumetric lighting">Volumetric</button>
+                                <button class="param-btn" data-param="rim lighting">Rim</button>
+                              </div>
+                            </div>
+                            <div class="parameter-group">
+                              <div class="group-title">Time of Day</div>
+                              <div class="parameter-buttons">
+                                <button class="param-btn" data-param="blue hour">Blue Hour</button>
+                                <button class="param-btn" data-param="sunrise">Sunrise</button>
+                                <button class="param-btn" data-param="sunset">Sunset</button>
+                                <button class="param-btn" data-param="midday sun">Midday</button>
+                                <button class="param-btn" data-param="night">Night</button>
+                                <button class="param-btn" data-param="overcast">Overcast</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- LOWER PRIORITY: Camera & Lens Settings -->
                         <div class="parameter-category">
                           <div class="category-header" data-category="camera">
                             <span class="category-icon">📷</span>
@@ -771,62 +808,14 @@ class AIImageEditorModule {
                           </div>
                         </div>
 
-                        <div class="parameter-category">
-                          <div class="category-header" data-category="lighting">
-                            <span class="category-icon">💡</span>
-                            <span class="category-title">Lighting</span>
-                            <span class="category-toggle">▼</span>
-                          </div>
-                          <div class="category-content" data-category="lighting" style="display: none;">
-                            <div class="parameter-group">
-                              <div class="group-title">Lighting Style & Quality</div>
-                              <div class="parameter-buttons">
-                                <button class="param-btn" data-param="cinematic lighting">Cinematic</button>
-                                <button class="param-btn" data-param="studio lighting">Studio</button>
-                                <button class="param-btn" data-param="rim lighting">Rim</button>
-                                <button class="param-btn" data-param="soft light">Soft</button>
-                                <button class="param-btn" data-param="hard light">Hard</button>
-                                <button class="param-btn" data-param="dramatic lighting">Dramatic</button>
-                                <button class="param-btn" data-param="volumetric lighting">Volumetric</button>
-                                <button class="param-btn" data-param="backlit">Backlit</button>
-                                <button class="param-btn" data-param="high-key lighting">High-key</button>
-                                <button class="param-btn" data-param="low-key lighting">Low-key</button>
-                                <button class="param-btn" data-param="neon lighting">Neon</button>
-                              </div>
-                            </div>
-                            <div class="parameter-group">
-                              <div class="group-title">Time of Day / Natural Light</div>
-                              <div class="parameter-buttons">
-                                <button class="param-btn" data-param="golden hour">Golden Hour</button>
-                                <button class="param-btn" data-param="blue hour">Blue Hour</button>
-                                <button class="param-btn" data-param="midday sun">Midday</button>
-                                <button class="param-btn" data-param="overcast">Overcast</button>
-                                <button class="param-btn" data-param="sunrise">Sunrise</button>
-                                <button class="param-btn" data-param="sunset">Sunset</button>
-                                <button class="param-btn" data-param="night">Night</button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
+                        <!-- LOWEST PRIORITY: Style & Aesthetics -->
                         <div class="parameter-category">
                           <div class="category-header" data-category="style">
                             <span class="category-icon">🎨</span>
-                            <span class="category-title">Style & Aesthetics</span>
+                            <span class="category-title">Style & Aesthetics (Advanced)</span>
                             <span class="category-toggle">▼</span>
                           </div>
                           <div class="category-content" data-category="style" style="display: none;">
-                            <div class="parameter-group">
-                              <div class="group-title">Level of Realism / Quality</div>
-                              <div class="parameter-buttons">
-                                <button class="param-btn" data-param="photorealistic">Photorealistic</button>
-                                <button class="param-btn" data-param="hyperrealistic">Hyperrealistic</button>
-                                <button class="param-btn" data-param="ultra-detailed">Ultra-detailed</button>
-                                <button class="param-btn" data-param="8K resolution">8K</button>
-                                <button class="param-btn" data-param="UHD">UHD</button>
-                                <button class="param-btn" data-param="cinematic photo">Cinematic Photo</button>
-                              </div>
-                            </div>
                             <div class="parameter-group">
                               <div class="group-title">Artistic Style / Medium</div>
                               <div class="parameter-buttons">
@@ -2364,8 +2353,44 @@ class AIImageEditorModule {
         progressMessageId = this.addChatMessage('ai', '🎨 Initializing image generation...');
       }
 
-      // Build content parts with text and attached files
-      const contentParts = [{ text: prompt }];
+      // Enhance prompt with high-resolution quality parameters for better results
+      let enhancedPrompt = prompt;
+
+      // Always add high-resolution quality parameters for better results
+      const qualityEnhancements = [];
+
+      // Add resolution enhancement if not present
+      if (!enhancedPrompt.toLowerCase().includes('8k') &&
+          !enhancedPrompt.toLowerCase().includes('4k') &&
+          !enhancedPrompt.toLowerCase().includes('high resolution')) {
+        qualityEnhancements.push('high resolution');
+      }
+
+      // Add quality enhancement if not present
+      if (!enhancedPrompt.toLowerCase().includes('quality') &&
+          !enhancedPrompt.toLowerCase().includes('detailed')) {
+        qualityEnhancements.push('high quality', 'ultra-detailed');
+      }
+
+      // Add sharpness enhancement if not present
+      if (!enhancedPrompt.toLowerCase().includes('sharp') &&
+          !enhancedPrompt.toLowerCase().includes('crisp')) {
+        qualityEnhancements.push('sharp details', 'crisp');
+      }
+
+      // Add professional quality if not present
+      if (!enhancedPrompt.toLowerCase().includes('professional') &&
+          !enhancedPrompt.toLowerCase().includes('masterpiece')) {
+        qualityEnhancements.push('professional quality');
+      }
+
+      // Append quality enhancements
+      if (qualityEnhancements.length > 0) {
+        enhancedPrompt += ', ' + qualityEnhancements.join(', ');
+      }
+
+      // Build content parts with enhanced text and attached files
+      const contentParts = [{ text: enhancedPrompt }];
 
       // Process attached files like "upload from PC" - convert to permanent storage first
       if (attachedFiles && attachedFiles.length > 0) {
@@ -2399,7 +2424,7 @@ class AIImageEditorModule {
         }
       }
 
-      // Use the image generation model with proper response modalities
+      // Use the image generation model with proper response modalities and high-quality settings
       const payload = {
         contents: [{
           parts: contentParts
@@ -2608,9 +2633,45 @@ class AIImageEditorModule {
       const imageData = await this.imageUrlToBase64(imageUrl);
       const mimeType = this.getMimeType(imageUrl);
 
-      // Build content parts with text, main image, and attached files
+      // Enhance prompt with high-resolution quality parameters for better editing results
+      let enhancedPrompt = prompt;
+
+      // Always add high-resolution quality parameters for better results
+      const qualityEnhancements = [];
+
+      // Add resolution enhancement if not present
+      if (!enhancedPrompt.toLowerCase().includes('8k') &&
+          !enhancedPrompt.toLowerCase().includes('4k') &&
+          !enhancedPrompt.toLowerCase().includes('high resolution')) {
+        qualityEnhancements.push('high resolution');
+      }
+
+      // Add quality enhancement if not present
+      if (!enhancedPrompt.toLowerCase().includes('quality') &&
+          !enhancedPrompt.toLowerCase().includes('detailed')) {
+        qualityEnhancements.push('high quality', 'ultra-detailed');
+      }
+
+      // Add sharpness enhancement if not present
+      if (!enhancedPrompt.toLowerCase().includes('sharp') &&
+          !enhancedPrompt.toLowerCase().includes('crisp')) {
+        qualityEnhancements.push('sharp details', 'crisp');
+      }
+
+      // Add professional quality if not present
+      if (!enhancedPrompt.toLowerCase().includes('professional') &&
+          !enhancedPrompt.toLowerCase().includes('masterpiece')) {
+        qualityEnhancements.push('professional quality');
+      }
+
+      // Append quality enhancements
+      if (qualityEnhancements.length > 0) {
+        enhancedPrompt += ', ' + qualityEnhancements.join(', ');
+      }
+
+      // Build content parts with enhanced text, main image, and attached files
       const contentParts = [
-        { text: prompt },
+        { text: enhancedPrompt },
         {
           inlineData: {
             mimeType: mimeType,
@@ -2651,7 +2712,10 @@ class AIImageEditorModule {
           parts: contentParts
         }],
         generationConfig: {
-          responseModalities: ["IMAGE", "TEXT"] // Required for image generation model
+          responseModalities: ["IMAGE", "TEXT"], // Required for image generation model
+          candidateCount: 1,
+          maxOutputTokens: 4096,
+          temperature: 0.7
         }
       };
 

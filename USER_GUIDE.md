@@ -53,15 +53,40 @@ Welcome to the complete user guide for AI Post Robot by Charith Harshana. This g
 - Processes content in real-time as you browse
 
 ### Manual Capture
-1. **Text Selection**: Select any text on supported platforms
-2. **Image Capture**: Right-click on images → "Save image link and caption"
-3. **Manual Upload**: Upload files directly in Advanced Scheduler
-4. **Drag & Drop**: Drop files into the Advanced Scheduler interface
+
+#### Image Posts with Captions
+1. **Select text (caption)** → **Right-click on image** → **"Save image link and caption"** → **Choose category**
+2. **Continue with Ctrl+click**: Hold Ctrl and click additional images to save them with the same caption
+3. **Direct image capture**: Ctrl+click any image to save it with currently selected text
+
+#### Text-Only Posts (NEW!)
+4. **Select text** → **Right-click on selected text** → **"Save as text post"** → **Choose category**
+   - Perfect for quotes, announcements, or text-based content
+   - No image required - creates pure text posts
+   - Integrates seamlessly with existing workflow
+
+#### File Upload Methods
+5. **Manual Upload**: Upload files directly in Advanced Scheduler
+6. **Drag & Drop**: Drop files into the Advanced Scheduler interface
 
 ### Custom Domains
 - Add any website for content capture in settings
 - Configure custom selectors for specific sites
 - Extend capture capabilities beyond default platforms
+
+### 🚀 Complete Workflow Quick Reference
+
+#### ✅ **Current Workflow (All Functional):**
+1. **Select text + Right-click image** → Save image post with caption ✅
+2. **Ctrl+click images** → Save more images with same caption ✅
+3. **Ctrl+click image directly** → Save image with current caption ✅
+4. **NEW: Select text + Right-click text** → "Save as text post" → Choose category ✅
+
+#### 🎯 **Perfect User Experience:**
+- **Consistent**: Same right-click pattern for both images and text
+- **Intuitive**: No learning curve - users already know the workflow
+- **Clean**: No UI clutter in popup
+- **Fast**: One right-click → category → done!
 
 ## 🚀 Advanced Scheduler
 
@@ -69,6 +94,7 @@ The Advanced Scheduler is the heart of AI Post Robot, providing professional-gra
 
 ### Key Features
 - **Visual Management**: Grid layout showing all posts with thumbnails
+- **Text-Only Posts**: Support for pure text content with 📝 icons
 - **Bulk Selection**: Select multiple posts for batch operations
 - **Category Organization**: Organize content with custom categories
 - **AI Integration**: Built-in AI text generation and image creation
@@ -81,6 +107,24 @@ The Advanced Scheduler is the heart of AI Post Robot, providing professional-gra
 - **Action Buttons**: Edit, Delete, Schedule, AI features
 - **Selection Tools**: Bulk operations and management
 - **Status Indicators**: Publishing status and progress tracking
+
+### Text-Only Posts Management
+Text-only posts are seamlessly integrated into the Advanced Scheduler with special visual indicators:
+
+#### Visual Identification
+- **📝 Green Icons**: Text posts display with green text icons instead of image thumbnails
+- **Character Count**: Metadata shows character count instead of image dimensions
+- **"TEXT POST" Label**: Clear identification in post metadata
+
+#### Filtering & Organization
+- **📝 Text Only Filter**: Dedicated filter button to show only text posts
+- **Category Integration**: Text posts work with all existing categories
+- **Mixed Content**: View text and image posts together or separately
+
+#### AI Features for Text Posts
+- **Full AI Support**: All AI rewriting features work with text-only posts
+- **Text-Only Mode**: AI automatically switches to text-only processing
+- **Same Workflow**: Identical AI interaction as with image posts
 
 ### Bulk Operations
 1. **Select Posts**: Click checkboxes or use "Select All"
@@ -294,6 +338,15 @@ Advanced image editing capabilities with AI-powered enhancements and professiona
 3. View captured content in popup
 4. Organize content into categories
 
+### Example 1.5: Text-Only Post Creation (NEW!)
+1. **Visit any supported website** (Facebook, Pinterest)
+2. **Select interesting text** (quote, announcement, tip)
+3. **Right-click on selected text** → "Save as text post"
+4. **Choose category** (e.g., "Quotes", "Tips", "Text Posts")
+5. **View in Advanced Scheduler** with 📝 green icon
+6. **Use AI rewriting** to create variations
+7. **Schedule normally** - posts as text-only content
+
 ### Example 2: AI-Enhanced Scheduling
 1. Open Advanced Scheduler
 2. Select captured or uploaded content
@@ -322,6 +375,26 @@ Advanced image editing capabilities with AI-powered enhancements and professiona
 2. Choose "Album" publishing type
 3. Add unified caption and title
 4. Schedule or publish immediately
+
+### Example 6: Complete Workflow - Mixed Content Campaign
+**Scenario**: Creating a social media campaign with both images and text posts
+
+#### Step 1: Capture Content
+1. **Text Posts**: Select quotes/tips → Right-click → "Save as text post" → "Campaign"
+2. **Image Posts**: Select caption → Right-click image → "Save image link and caption" → "Campaign"
+3. **Bulk Images**: Ctrl+click multiple images with same caption
+
+#### Step 2: Organize in Advanced Scheduler
+1. **Open Advanced Scheduler** → Switch to "Campaign" category
+2. **View Mixed Content**: See both 📝 text posts and 🖼️ image posts
+3. **Use Filters**: Toggle "📝 Text Only" to focus on text content
+4. **AI Enhancement**: Select posts → Use AI rewrite for variations
+
+#### Step 3: Strategic Scheduling
+1. **Select Mix**: Choose both text and image posts
+2. **Stagger Content**: Schedule text posts between image posts
+3. **Optimal Timing**: Use AI-suggested posting times
+4. **Monitor Results**: Track publishing success
 
 ## 🔧 Technical Architecture
 
