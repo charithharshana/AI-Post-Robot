@@ -5,6 +5,7 @@ let selectedPosts = new Set();
 let channelsData = [];
 let currentCategory = 'all';
 let showTextOnlyFilter = false;
+let channelPlatformMappings = {};
 
 // Image Editor Integration
 let imageEditorIntegration = null;
@@ -108,8 +109,10 @@ async function loadSavedData() {
 
 async function loadChannels() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['channelsData'], (result) => {
+    chrome.storage.local.get(['channelsData', 'channelPlatformMappings'], (result) => {
       channelsData = result.channelsData || [];
+      // Store platform mappings for use in displayChannels
+      channelPlatformMappings = result.channelPlatformMappings || {};
       displayChannels();
       resolve();
     });
@@ -463,26 +466,35 @@ function updateSelectedPostsInfo() {
 
 function displayChannels() {
   const channelsList = document.getElementById('channelsList');
-  
+
   if (channelsData.length === 0) {
     channelsList.innerHTML = '<div style="text-align: center; color: #718096; padding: 10px;">❌ No channels found. Please configure API in settings.</div>';
     return;
   }
-  
+
+  // Use stored platform mappings
+  const platformMappings = channelPlatformMappings || {};
+
   let html = '';
   channelsData.forEach(channel => {
-    // Enhanced platform detection
-    const detectedPlatform = detectPlatform(channel);
+    // Use saved platform mapping or detect platform
+    const savedPlatform = platformMappings[channel.id];
+    const detectedPlatform = savedPlatform || detectPlatform(channel);
     const platformIcon = getPlatformIcon(detectedPlatform);
     html += `
       <div class="channel-option">
-        <input type="checkbox" value="${channel.id}" id="channel_${channel.id}">
+        <input type="checkbox" value="${channel.id}" id="channel_${channel.id}" data-platform="${detectedPlatform.toLowerCase()}">
         <label for="channel_${channel.id}">${platformIcon} ${channel.name || channel.username || 'Unnamed'}</label>
       </div>
     `;
   });
-  
+
   channelsList.innerHTML = html;
+
+  // Add event listeners to channel checkboxes
+  channelsList.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('change', updatePlatformSettings);
+  });
 }
 
 function detectPlatform(channel) {
@@ -495,53 +507,314 @@ function detectPlatform(channel) {
   const name = (channel.name || channel.username || '').toLowerCase();
   const url = (channel.url || '').toLowerCase();
 
-  // Platform detection based on name patterns
+  // Platform detection based on name patterns - Only RoboPost API supported platforms
   if (name.includes('facebook') || url.includes('facebook.com')) {
-    return 'Facebook';
+    return 'facebook';
   }
   if (name.includes('instagram') || url.includes('instagram.com')) {
-    return 'Instagram';
-  }
-  if (name.includes('twitter') || url.includes('twitter.com') || url.includes('x.com')) {
-    return 'Twitter';
-  }
-  if (name.includes('linkedin') || url.includes('linkedin.com')) {
-    return 'LinkedIn';
+    return 'instagram';
   }
   if (name.includes('pinterest') || url.includes('pinterest.com')) {
-    return 'Pinterest';
+    return 'pinterest';
   }
   if (name.includes('youtube') || url.includes('youtube.com')) {
-    return 'YouTube';
+    return 'youtube';
   }
   if (name.includes('tiktok') || url.includes('tiktok.com')) {
-    return 'TikTok';
+    return 'tiktok';
   }
-  if (name.includes('threads') || url.includes('threads.net')) {
-    return 'Threads';
+  if (name.includes('wordpress') || url.includes('wordpress.com') || url.includes('wp.com')) {
+    return 'wordpress';
+  }
+  if (name.includes('gmb') || name.includes('google my business') || name.includes('google business') || name.includes('mybusiness')) {
+    return 'gmb';
   }
 
   // Check channel type or other properties
   if (channel.type) {
-    return channel.type;
+    const type = channel.type.toLowerCase();
+    // Map common type names to our platform identifiers
+    if (type.includes('facebook')) return 'facebook';
+    if (type.includes('instagram')) return 'instagram';
+    if (type.includes('pinterest')) return 'pinterest';
+    if (type.includes('youtube')) return 'youtube';
+    if (type.includes('tiktok')) return 'tiktok';
+    if (type.includes('wordpress')) return 'wordpress';
+    if (type.includes('gmb') || type.includes('google')) return 'gmb';
+    return type;
   }
 
   // Default fallback
-  return 'Social Platform';
+  return 'unknown';
 }
 
 function getPlatformIcon(platform) {
   const icons = {
     'facebook': '📘',
     'instagram': '📷',
-    'twitter': '🐦',
-    'linkedin': '💼',
     'pinterest': '📌',
     'youtube': '📺',
     'tiktok': '🎵',
-    'threads': '🧵'
+    'wordpress': '📝',
+    'gmb': '🏢',
+    'unknown': '📱'
   };
   return icons[platform?.toLowerCase()] || '📱';
+}
+
+function updatePlatformSettings() {
+  const checkedChannels = document.querySelectorAll('#channelsList input[type="checkbox"]:checked');
+  const platformSettings = document.getElementById('platformSettings');
+  
+  // Get unique platforms from selected channels
+  const selectedPlatforms = new Set();
+  checkedChannels.forEach(checkbox => {
+    const platform = checkbox.dataset.platform;
+    if (platform) {
+      selectedPlatforms.add(platform);
+    }
+  });
+
+  // Hide all platform settings first
+  document.querySelectorAll('.platform-settings').forEach(setting => {
+    setting.style.display = 'none';
+  });
+
+  // Show platform settings container if any channels are selected
+  if (selectedPlatforms.size > 0) {
+    platformSettings.style.display = 'block';
+
+    // Show relevant platform settings
+    selectedPlatforms.forEach(platform => {
+      // Convert platform name to match HTML element IDs (lowercase + 'Settings')
+      const settingsElement = document.getElementById(`${platform}Settings`);
+      if (settingsElement) {
+        settingsElement.style.display = 'block';
+      }
+    });
+  } else {
+    platformSettings.style.display = 'none';
+  }
+
+  // Handle GMB post type changes
+  const gmbPostType = document.getElementById('gmbPostTopicType');
+  if (gmbPostType) {
+    gmbPostType.addEventListener('change', updateGMBFields);
+    updateGMBFields(); // Initialize on load
+  }
+}
+
+function updateGMBFields() {
+  const postType = document.getElementById('gmbPostTopicType').value;
+  const offerFields = document.getElementById('gmbOfferFields');
+  const eventFields = document.getElementById('gmbEventFields');
+
+  // Hide all conditional fields first
+  offerFields.style.display = 'none';
+  eventFields.style.display = 'none';
+
+  // Show relevant fields based on post type
+  if (postType === 'OFFER') {
+    offerFields.style.display = 'block';
+  } else if (postType === 'EVENT') {
+    eventFields.style.display = 'block';
+  }
+}
+
+function getPlatformSpecificSettings() {
+  const platformSettings = {};
+
+  // Get selected platforms to determine which settings to include
+  const checkedChannels = document.querySelectorAll('#channelsList input[type="checkbox"]:checked');
+
+  const selectedPlatforms = new Set();
+  checkedChannels.forEach(checkbox => {
+    const platform = checkbox.dataset.platform;
+    if (platform) {
+      selectedPlatforms.add(platform);
+    }
+  });
+
+  // Pinterest Settings - Smart Integration
+  if (selectedPlatforms.has('pinterest')) {
+    // Use main post title as pin title
+    const mainTitle = document.getElementById('postTitle');
+    const pinTitle = mainTitle && mainTitle.value.trim() ? mainTitle.value.trim() : "";
+
+    // Use first link from links editor as destination link
+    const firstLinkUrl = getFirstLinkUrl();
+
+    platformSettings.pinterest_settings = {
+      pinTitle: pinTitle,
+      destinationLink: firstLinkUrl
+    };
+  }
+
+  // YouTube Settings - Smart Integration
+  if (selectedPlatforms.has('youtube')) {
+    // Use main post title as video title, main caption as description
+    const mainTitle = document.getElementById('postTitle');
+    const mainCaption = document.getElementById('postCaption');
+    const youtubeVideoType = document.getElementById('youtubeVideoType');
+    const youtubePrivacyStatus = document.getElementById('youtubePrivacyStatus');
+    const youtubeThumbnailImageObject = document.getElementById('youtubeThumbnailImageObject');
+
+    const youtubeSettings = {
+      videoTitle: mainTitle && mainTitle.value.trim() ? mainTitle.value.trim() : "",
+      videoDescription: mainCaption && mainCaption.value.trim() ? mainCaption.value.trim() : "",
+      videoType: youtubeVideoType ? youtubeVideoType.value : 'video',
+      videoPrivacyStatus: youtubePrivacyStatus ? youtubePrivacyStatus.value : 'public',
+      videoThumbnailImageObject: null,
+      videoThumbnailGroupUuid: null
+    };
+
+    // Add optional thumbnail settings
+    if (youtubeThumbnailImageObject && youtubeThumbnailImageObject.value.trim()) {
+      youtubeSettings.videoThumbnailImageObject = youtubeThumbnailImageObject.value.trim();
+    }
+
+    platformSettings.youtube_settings = youtubeSettings;
+  }
+
+  // TikTok Settings - Smart Integration
+  if (selectedPlatforms.has('tiktok')) {
+    // Use main post title as TikTok title
+    const mainTitle = document.getElementById('postTitle');
+    const tiktokPrivacyLevel = document.getElementById('tiktokPrivacyLevel');
+    const tiktokDisableDuet = document.getElementById('tiktokDisableDuet');
+    const tiktokDisableComment = document.getElementById('tiktokDisableComment');
+    const tiktokDisableStitch = document.getElementById('tiktokDisableStitch');
+    const tiktokAutoAddMusic = document.getElementById('tiktokAutoAddMusic');
+    const tiktokVideoCoverTimestamp = document.getElementById('tiktokVideoCoverTimestamp');
+
+    const tiktokSettings = {
+      title: mainTitle && mainTitle.value.trim() ? mainTitle.value.trim() : "",
+      privacyLevel: tiktokPrivacyLevel ? tiktokPrivacyLevel.value : 'PUBLIC_TO_EVERYONE',
+      disableDuet: tiktokDisableDuet ? tiktokDisableDuet.checked : false,
+      disableComment: tiktokDisableComment ? tiktokDisableComment.checked : false,
+      disableStitch: tiktokDisableStitch ? tiktokDisableStitch.checked : false,
+      videoCoverTimestampMs: tiktokVideoCoverTimestamp ? parseInt(tiktokVideoCoverTimestamp.value) || 0 : 0,
+      videoThumbnailGroupUuid: null,
+      autoAddMusic: tiktokAutoAddMusic ? tiktokAutoAddMusic.checked : true
+    };
+
+    platformSettings.tiktok_settings = tiktokSettings;
+  }
+
+  // WordPress Settings - Smart Integration
+  if (selectedPlatforms.has('wordpress')) {
+    // Use main post title and caption for WordPress
+    const mainTitle = document.getElementById('postTitle');
+    const mainCaption = document.getElementById('postCaption');
+    const wordpressSlug = document.getElementById('wordpressSlug');
+    const wordpressPostType = document.getElementById('wordpressPostType');
+    const wordpressCategories = document.getElementById('wordpressCategories');
+    const wordpressTags = document.getElementById('wordpressTags');
+    const wordpressFeaturedImage = document.getElementById('wordpressFeaturedImage');
+    const wordpressParentPage = document.getElementById('wordpressParentPage');
+
+    const wordpressSettings = {
+      postTitle: mainTitle && mainTitle.value.trim() ? mainTitle.value.trim() : "",
+      postText: mainCaption && mainCaption.value.trim() ? mainCaption.value.trim() : "",
+      postSlug: wordpressSlug && wordpressSlug.value.trim() ? wordpressSlug.value.trim() : "",
+      postType: wordpressPostType ? wordpressPostType.value : 'POST',
+      postCategories: wordpressCategories && wordpressCategories.value.trim() ? wordpressCategories.value.split(',').map(c => c.trim()) : [],
+      postTags: wordpressTags && wordpressTags.value.trim() ? wordpressTags.value.split(',').map(t => t.trim()) : [],
+      postFeaturedImage: null,
+      postParentPage: wordpressParentPage ? parseInt(wordpressParentPage.value) || 0 : 0
+    };
+
+    // Add optional featured image
+    if (wordpressFeaturedImage && wordpressFeaturedImage.value.trim()) {
+      wordpressSettings.postFeaturedImage = wordpressFeaturedImage.value.trim();
+    }
+
+    platformSettings.wordpress_settings = wordpressSettings;
+  }
+
+  // Facebook Settings
+  if (selectedPlatforms.has('facebook')) {
+    const facebookPostType = document.getElementById('facebookPostType');
+    platformSettings.facebook_settings = {
+      postType: facebookPostType ? facebookPostType.value : 'POST'
+    };
+  }
+
+  // Instagram Settings
+  if (selectedPlatforms.has('instagram')) {
+    const instagramPostType = document.getElementById('instagramPostType');
+    platformSettings.instagram_settings = {
+      postType: instagramPostType ? instagramPostType.value : 'POST'
+    };
+  }
+
+  // Google My Business Settings
+  if (selectedPlatforms.has('gmb')) {
+    const gmbPostTopicType = document.getElementById('gmbPostTopicType');
+    const gmbSettings = {
+      postTopicType: gmbPostTopicType ? gmbPostTopicType.value : 'STANDARD'
+    };
+
+    // Add CTA button settings
+    const gmbCtaButtonType = document.getElementById('gmbCtaButtonType');
+    const gmbCtaUrl = document.getElementById('gmbCtaUrl');
+    if (gmbCtaButtonType && gmbCtaButtonType.value !== 'ACTION_TYPE_UNSPECIFIED') {
+      gmbSettings.ctaButtonActionType = gmbCtaButtonType.value;
+      if (gmbCtaUrl && gmbCtaUrl.value.trim()) {
+        gmbSettings.ctaUrl = gmbCtaUrl.value.trim();
+      }
+    }
+
+    // Add offer-specific settings
+    if (gmbPostTopicType && gmbPostTopicType.value === 'OFFER') {
+      const gmbOfferTitle = document.getElementById('gmbOfferTitle');
+      const gmbOfferCouponCode = document.getElementById('gmbOfferCouponCode');
+      const gmbOfferRedeemUrl = document.getElementById('gmbOfferRedeemUrl');
+      const gmbOfferTerms = document.getElementById('gmbOfferTerms');
+      const gmbOfferStartDate = document.getElementById('gmbOfferStartDate');
+      const gmbOfferEndDate = document.getElementById('gmbOfferEndDate');
+
+      if (gmbOfferTitle && gmbOfferTitle.value.trim()) {
+        gmbSettings.offerTitle = gmbOfferTitle.value.trim();
+      }
+      if (gmbOfferCouponCode && gmbOfferCouponCode.value.trim()) {
+        gmbSettings.offerCouponCode = gmbOfferCouponCode.value.trim();
+      }
+      if (gmbOfferRedeemUrl && gmbOfferRedeemUrl.value.trim()) {
+        gmbSettings.offerRedeemOnlineUrl = gmbOfferRedeemUrl.value.trim();
+      }
+      if (gmbOfferTerms && gmbOfferTerms.value.trim()) {
+        gmbSettings.offerTermsConditions = gmbOfferTerms.value.trim();
+      }
+      if (gmbOfferStartDate && gmbOfferStartDate.value) {
+        gmbSettings.offerStartDt = new Date(gmbOfferStartDate.value).toISOString();
+      }
+      if (gmbOfferEndDate && gmbOfferEndDate.value) {
+        gmbSettings.offerEndDt = new Date(gmbOfferEndDate.value).toISOString();
+      }
+    }
+
+    // Add event-specific settings
+    if (gmbPostTopicType && gmbPostTopicType.value === 'EVENT') {
+      const gmbEventTitle = document.getElementById('gmbEventTitle');
+      const gmbEventStartDate = document.getElementById('gmbEventStartDate');
+      const gmbEventEndDate = document.getElementById('gmbEventEndDate');
+
+      if (gmbEventTitle && gmbEventTitle.value.trim()) {
+        gmbSettings.eventTitle = gmbEventTitle.value.trim();
+      }
+      if (gmbEventStartDate && gmbEventStartDate.value) {
+        gmbSettings.eventStartDt = new Date(gmbEventStartDate.value).toISOString();
+      }
+      if (gmbEventEndDate && gmbEventEndDate.value) {
+        gmbSettings.eventEndDt = new Date(gmbEventEndDate.value).toISOString();
+      }
+    }
+
+    platformSettings.gmb_settings = gmbSettings;
+  }
+
+  return platformSettings;
 }
 
 function updateStats() {
@@ -725,6 +998,12 @@ function setupEventListeners() {
   // Links editor
   document.getElementById('addLinkBtn').addEventListener('click', addLink);
 
+  // Saved links functionality
+  document.getElementById('useSavedLinkBtn').addEventListener('click', useSavedLink);
+  document.getElementById('manageSavedLinksBtn').addEventListener('click', showSavedLinksDialog);
+  document.getElementById('closeSavedLinksBtn').addEventListener('click', hideSavedLinksDialog);
+  document.getElementById('addSavedLinkBtn').addEventListener('click', addSavedLink);
+
   // Caption editor enhancements
   const captionTextarea = document.getElementById('postCaption');
   captionTextarea.addEventListener('input', updateCaptionCharCount);
@@ -753,6 +1032,9 @@ function setupEventListeners() {
 
   // AI Rewrite buttons
   setupRewriteButtonListeners();
+
+  // Initialize platform settings
+  updatePlatformSettings();
 }
 
 function setupRewriteButtonListeners() {
@@ -935,15 +1217,27 @@ function addLink() {
   const linkHtml = `
     <div class="link-item" data-link-id="${linkId}" style="display: flex; gap: 5px; margin-bottom: 8px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc;">
       <div style="flex: 1;">
-        <input type="url" placeholder="Enter URL" class="form-input link-url" style="margin-bottom: 5px;" onchange="updateLinkPreview(${linkId})">
+        <input type="url" placeholder="Enter URL" class="form-input link-url" style="margin-bottom: 5px;" data-link-id="${linkId}">
         <input type="text" placeholder="Link text (optional)" class="form-input link-text">
         <div class="link-preview" style="margin-top: 5px; font-size: 11px; color: #718096;"></div>
       </div>
-      <button class="btn btn-secondary" onclick="removeLink(${linkId})" style="padding: 8px; height: fit-content;">❌</button>
+      <button class="btn btn-secondary remove-link-btn" data-link-id="${linkId}" style="padding: 8px; height: fit-content;">❌</button>
     </div>
   `;
 
   linksEditor.insertAdjacentHTML('beforeend', linkHtml);
+
+  // Add event listeners for the new link
+  const urlInput = linksEditor.querySelector(`[data-link-id="${linkId}"].link-url`);
+  const removeBtn = linksEditor.querySelector(`[data-link-id="${linkId}"].remove-link-btn`);
+
+  if (urlInput) {
+    urlInput.addEventListener('change', () => updateLinkPreview(linkId));
+  }
+
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => removeLink(linkId));
+  }
 }
 
 function updateLinkPreview(linkId) {
@@ -977,6 +1271,205 @@ function removeLink(linkId) {
   if (linkElement) {
     linkElement.remove();
   }
+}
+
+// Saved Links Management
+let savedLinks = [];
+
+async function loadSavedLinks() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['savedLinks'], (result) => {
+      savedLinks = result.savedLinks || [];
+      updateSavedLinksDropdown();
+      resolve();
+    });
+  });
+}
+
+function updateSavedLinksDropdown() {
+  const dropdown = document.getElementById('savedLinksDropdown');
+  if (!dropdown) return;
+
+  dropdown.innerHTML = '<option value="">Select a saved link...</option>';
+
+  savedLinks.forEach((link, index) => {
+    const option = document.createElement('option');
+    option.value = index;
+    option.textContent = `${link.label} (${link.url})`;
+    dropdown.appendChild(option);
+  });
+}
+
+function useSavedLink() {
+  const dropdown = document.getElementById('savedLinksDropdown');
+  const selectedIndex = dropdown.value;
+
+  if (selectedIndex === '') return;
+
+  const selectedLink = savedLinks[selectedIndex];
+  if (selectedLink) {
+    // Add the saved link to the current links editor
+    addLinkFromSaved(selectedLink.url, selectedLink.label);
+  }
+}
+
+function addLinkFromSaved(url, label) {
+  const linksEditor = document.getElementById('linksEditor');
+  const linkId = Date.now();
+
+  const linkHtml = `
+    <div class="link-item" data-link-id="${linkId}" style="display: flex; gap: 5px; margin-bottom: 8px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc;">
+      <div style="flex: 1;">
+        <input type="url" placeholder="Enter URL" class="form-input link-url" style="margin-bottom: 5px;" data-link-id="${linkId}" value="${url}">
+        <input type="text" placeholder="Link text (optional)" class="form-input link-text" value="${label}">
+        <div class="link-preview" style="margin-top: 5px; font-size: 11px; color: #718096;"></div>
+      </div>
+      <button class="btn btn-secondary remove-link-btn" data-link-id="${linkId}" style="padding: 8px; height: fit-content;">❌</button>
+    </div>
+  `;
+
+  linksEditor.insertAdjacentHTML('beforeend', linkHtml);
+
+  // Add event listeners for the new link
+  const urlInput = linksEditor.querySelector(`[data-link-id="${linkId}"].link-url`);
+  const removeBtn = linksEditor.querySelector(`[data-link-id="${linkId}"].remove-link-btn`);
+
+  if (urlInput) {
+    urlInput.addEventListener('change', () => updateLinkPreview(linkId));
+    // Trigger preview update immediately
+    updateLinkPreview(linkId);
+  }
+
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => removeLink(linkId));
+  }
+}
+
+function showSavedLinksDialog() {
+  updateSavedLinksList();
+  const dialog = document.getElementById('savedLinksDialog');
+  dialog.style.display = 'flex';
+
+  // Add click-outside-to-close functionality
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      hideSavedLinksDialog();
+    }
+  });
+
+  // Add keyboard support (Escape to close)
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      hideSavedLinksDialog();
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+}
+
+function hideSavedLinksDialog() {
+  document.getElementById('savedLinksDialog').style.display = 'none';
+
+  // Clear the input fields when closing
+  document.getElementById('newLinkLabel').value = '';
+  document.getElementById('newLinkUrl').value = '';
+}
+
+function updateSavedLinksList() {
+  const list = document.getElementById('savedLinksList');
+  if (!list) return;
+
+  if (savedLinks.length === 0) {
+    list.innerHTML = '<div style="text-align: center; color: #718096; padding: 20px;">No saved links yet</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+
+  savedLinks.forEach((link, index) => {
+    const linkItem = document.createElement('div');
+    linkItem.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 5px; background: white;';
+
+    linkItem.innerHTML = `
+      <div style="flex: 1;">
+        <div style="font-weight: 600; color: #4a5568;">${link.label}</div>
+        <div style="font-size: 11px; color: #718096; word-break: break-all;">${link.url}</div>
+      </div>
+      <button class="btn btn-danger delete-saved-link-btn" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">Delete</button>
+    `;
+
+    list.appendChild(linkItem);
+  });
+
+  // Add event listeners for delete buttons
+  list.querySelectorAll('.delete-saved-link-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.target.dataset.index);
+      deleteSavedLink(index);
+    });
+  });
+}
+
+function addSavedLink() {
+  const labelInput = document.getElementById('newLinkLabel');
+  const urlInput = document.getElementById('newLinkUrl');
+
+  const label = labelInput.value.trim();
+  const url = urlInput.value.trim();
+
+  if (!label || !url) {
+    alert('Please enter both label and URL');
+    return;
+  }
+
+  // Validate URL
+  try {
+    new URL(url);
+  } catch (e) {
+    alert('Please enter a valid URL');
+    return;
+  }
+
+  // Add to saved links
+  savedLinks.push({ label, url });
+
+  // Save to storage
+  chrome.storage.local.set({ savedLinks }, () => {
+    console.log('Saved link added:', { label, url });
+
+    // Clear inputs
+    labelInput.value = '';
+    urlInput.value = '';
+
+    // Update UI
+    updateSavedLinksDropdown();
+    updateSavedLinksList();
+  });
+}
+
+function deleteSavedLink(index) {
+  if (confirm('Delete this saved link?')) {
+    savedLinks.splice(index, 1);
+
+    // Save to storage
+    chrome.storage.local.set({ savedLinks }, () => {
+      console.log('Saved link deleted at index:', index);
+
+      // Update UI
+      updateSavedLinksDropdown();
+      updateSavedLinksList();
+    });
+  }
+}
+
+function getFirstLinkUrl() {
+  // Get the first link URL from the links editor for Pinterest destination link
+  const firstLinkInput = document.querySelector('#linksEditor .link-url');
+
+  if (firstLinkInput && firstLinkInput.value.trim()) {
+    return firstLinkInput.value.trim();
+  }
+  return "";
 }
 
 function showError(message) {
@@ -1267,13 +1760,22 @@ async function publishNow() {
       const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
       const imageUrls = posts.map(post => post.imageUrl);
 
-      await window.roboPostAPI.scheduleAlbumFromCapture({
+      // DEBUG: Get platform settings and log them
+      const platformSettings = getPlatformSpecificSettings();
+      console.log('🔍 DEBUG: Publish now platform settings generated:', JSON.stringify(platformSettings, null, 2));
+
+      const publishOptions = {
         imageUrls: imageUrls,
         caption: caption,
         channelIds: selectedChannels,
         scheduleAt: publishTime,
-        title: title
-      });
+        title: title,
+        platformSettings: platformSettings // Explicitly pass as platformSettings
+      };
+
+      console.log('🔍 DEBUG: Complete publish options:', JSON.stringify(publishOptions, null, 2));
+
+      await window.roboPostAPI.scheduleAlbumFromCapture(publishOptions);
 
       showMessage('✅ Album published successfully!', 'success');
     } else {
@@ -1298,13 +1800,22 @@ async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
   const imageUrls = posts.map(post => post.imageUrl);
 
   try {
-    const result = await window.roboPostAPI.scheduleAlbumFromCapture({
+    // DEBUG: Get platform settings and log them
+    const platformSettings = getPlatformSpecificSettings();
+    console.log('🔍 DEBUG: Album platform settings generated:', JSON.stringify(platformSettings, null, 2));
+
+    const albumOptions = {
       imageUrls: imageUrls,
       caption: caption,
       channelIds: channels,
       scheduleAt: new Date(scheduleDateTime).toISOString(),
-      title: title
-    });
+      title: title,
+      platformSettings: platformSettings // Explicitly pass as platformSettings
+    };
+
+    console.log('🔍 DEBUG: Complete album options:', JSON.stringify(albumOptions, null, 2));
+
+    const result = await window.roboPostAPI.scheduleAlbumFromCapture(albumOptions);
 
     console.log('Album scheduled successfully:', result);
     return result;
@@ -1351,13 +1862,16 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
     }
 
     try {
+      const platformSettings = getPlatformSpecificSettings();
+
       const scheduleOptions = {
         imageUrl: post.imageUrl,
         caption: caption || post.caption,
         channelIds: channels,
         scheduleAt: scheduleTime.toISOString(),
         title: title,
-        isTextOnly: post.isTextOnly || false
+        isTextOnly: post.isTextOnly || false,
+        platformSettings: platformSettings
       };
 
       // Handle storage: existing storageId or upload now if needed (skip for text-only posts)
@@ -3210,6 +3724,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load saved data (posts) - this replaces the undefined loadCapturedPosts
   await loadSavedData();
+
+  // Load saved links
+  await loadSavedLinks();
+
   setupEventListeners();
   setupRewriteButtonListeners();
   updateCaptionCharCount();

@@ -244,26 +244,61 @@ function loadChannelsList(channelsData, defaultChannels) {
 
   const selectedChannelIds = defaultChannels ? defaultChannels.split('\n').map(id => id.trim()) : [];
 
-  let html = '';
-  channelsData.forEach(channel => {
-    const isSelected = selectedChannelIds.includes(channel.id);
+  // Load saved platform mappings
+  chrome.storage.local.get(['channelPlatformMappings'], (result) => {
+    const platformMappings = result.channelPlatformMappings || {};
 
-    // Enhanced platform detection
-    const detectedPlatform = detectPlatform(channel);
-    const platformIcon = getPlatformIcon(detectedPlatform);
+    let html = '';
+    channelsData.forEach(channel => {
+      const isSelected = selectedChannelIds.includes(channel.id);
 
-    html += `
-      <div class="channel-item">
-        <input type="checkbox" value="${channel.id}" ${isSelected ? 'checked' : ''}>
-        <div class="channel-info">
-          <div class="channel-name">${platformIcon} ${channel.name || channel.username || 'Unnamed Channel'}</div>
-          <div class="channel-platform">${detectedPlatform} • ID: ${channel.id}</div>
+      // Use saved platform mapping or detect platform
+      const savedPlatform = platformMappings[channel.id];
+      const detectedPlatform = savedPlatform || detectPlatform(channel);
+      const platformIcon = getPlatformIcon(detectedPlatform);
+
+      html += `
+        <div class="channel-item ${isSelected ? 'selected' : ''}">
+          <div class="channel-header">
+            <input type="checkbox" value="${channel.id}" ${isSelected ? 'checked' : ''}>
+            <div class="channel-info">
+              <div class="channel-name">${platformIcon} ${(channel.name || channel.username || 'Unnamed').substring(0, 15)}${(channel.name || channel.username || 'Unnamed').length > 15 ? '...' : ''}</div>
+              <div class="channel-platform">${channel.id.substring(0, 8)}...</div>
+            </div>
+          </div>
+          <select class="platform-selector" data-channel-id="${channel.id}">
+            <option value="facebook" ${detectedPlatform === 'facebook' ? 'selected' : ''}>📘 FB</option>
+            <option value="instagram" ${detectedPlatform === 'instagram' ? 'selected' : ''}>📷 IG</option>
+            <option value="pinterest" ${detectedPlatform === 'pinterest' ? 'selected' : ''}>📌 PIN</option>
+            <option value="youtube" ${detectedPlatform === 'youtube' ? 'selected' : ''}>📺 YT</option>
+            <option value="tiktok" ${detectedPlatform === 'tiktok' ? 'selected' : ''}>🎵 TT</option>
+            <option value="wordpress" ${detectedPlatform === 'wordpress' ? 'selected' : ''}>📝 WP</option>
+            <option value="gmb" ${detectedPlatform === 'gmb' ? 'selected' : ''}>🏢 GMB</option>
+            <option value="unknown" ${detectedPlatform === 'unknown' ? 'selected' : ''}>❓ ???</option>
+          </select>
         </div>
-      </div>
-    `;
-  });
+      `;
+    });
 
-  channelsList.innerHTML = html;
+    channelsList.innerHTML = html;
+
+    // Add event listeners for platform selectors
+    document.querySelectorAll('.platform-selector').forEach(selector => {
+      selector.addEventListener('change', savePlatformMapping);
+    });
+
+  // Add event listeners for checkboxes to update visual selection
+  document.querySelectorAll('.channel-item input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+      const channelItem = e.target.closest('.channel-item');
+      if (e.target.checked) {
+        channelItem.classList.add('selected');
+      } else {
+        channelItem.classList.remove('selected');
+      }
+    });
+  });
+  });
 }
 
 function detectPlatform(channel) {
@@ -315,14 +350,37 @@ function getPlatformIcon(platform) {
   const icons = {
     'facebook': '📘',
     'instagram': '📷',
-    'twitter': '🐦',
-    'linkedin': '💼',
     'pinterest': '📌',
     'youtube': '📺',
     'tiktok': '🎵',
-    'threads': '🧵'
+    'wordpress': '📝',
+    'gmb': '🏢',
+    'unknown': '❓'
   };
   return icons[platform?.toLowerCase()] || '📱';
+}
+
+function savePlatformMapping(event) {
+  const channelId = event.target.dataset.channelId;
+  const platform = event.target.value;
+
+  // Load existing mappings
+  chrome.storage.local.get(['channelPlatformMappings'], (result) => {
+    const mappings = result.channelPlatformMappings || {};
+    mappings[channelId] = platform;
+
+    // Save updated mappings
+    chrome.storage.local.set({ channelPlatformMappings: mappings }, () => {
+      console.log(`Platform mapping saved: ${channelId} -> ${platform}`);
+
+      // Update the icon in the UI
+      const channelItem = event.target.closest('.channel-item');
+      const channelName = channelItem.querySelector('.channel-name');
+      const icon = getPlatformIcon(platform);
+      const nameText = channelName.textContent.replace(/^[📘📷📌📺🎵📝🏢❓📱]\s*/, '');
+      channelName.textContent = `${icon} ${nameText}`;
+    });
+  });
 }
 
 

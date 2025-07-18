@@ -711,8 +711,16 @@ class RoboPostAPI {
         console.log('📝 Scheduling text-only post (no media)');
       }
 
-      // Only add YouTube settings if title provided
-      if (title) {
+      // Step 3: Add platform-specific settings
+      if (platformSettings && Object.keys(platformSettings).length > 0) {
+        console.log('🎯 Adding platform-specific settings:', JSON.stringify(platformSettings, null, 2));
+
+        // Merge all platform settings into the payload
+        Object.assign(payload, platformSettings);
+      }
+
+      // Legacy: Only add YouTube settings if title provided and no platform settings exist
+      if (title && !platformSettings.youtube_settings) {
         payload.youtube_settings = {
           videoTitle: title,
           videoDescription: caption || '',
@@ -790,8 +798,16 @@ class RoboPostAPI {
         is_draft: false
       };
 
-      // Only add YouTube settings if title provided
-      if (title) {
+      // Step 3: Add platform-specific settings
+      if (platformSettings && Object.keys(platformSettings).length > 0) {
+        console.log('🎯 Adding platform-specific settings to album:', JSON.stringify(platformSettings, null, 2));
+
+        // Merge all platform settings into the payload
+        Object.assign(payload, platformSettings);
+      }
+
+      // Legacy: Only add YouTube settings if title provided and no platform settings exist
+      if (title && !platformSettings.youtube_settings) {
         payload.youtube_settings = {
           videoTitle: title,
           videoDescription: caption || '',
