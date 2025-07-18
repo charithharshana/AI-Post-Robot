@@ -1,0 +1,11 @@
+# Ignore specific files
+code.txt
+
+# Ignore log files
+*.log
+
+# Ignore the docs/robopost_scheduler_complete.py file
+docs/robopost_scheduler_complete.py
+
+# Ignore prebuilt-plugin directory (contains source code and build files)
+image-editor-module/prebuilt-plugin/
