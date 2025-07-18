@@ -4,6 +4,8 @@ let categories = [];
 let selectedPosts = new Set();
 let channelsData = [];
 let currentCategory = 'all';
+let userEditedTitle = false;
+let userEditedCaption = false;
 let showTextOnlyFilter = false;
 let channelPlatformMappings = {};
 
@@ -368,14 +370,25 @@ function togglePostSelection(postId, cardElement, event) {
 
 function updateSelectedPostsInfo() {
   const infoContainer = document.getElementById('selectedPostsInfo');
-  
+
   if (selectedPosts.size === 0) {
     infoContainer.classList.add('hidden');
+    // Hide save buttons when no posts are selected
+    document.getElementById('saveTitleBtn').style.display = 'none';
+    document.getElementById('saveCaptionBtn').style.display = 'none';
+    // Reset edit flags when no posts selected
+    userEditedTitle = false;
+    userEditedCaption = false;
     updateEditButtonState();
+    // Update queue mode UI
+    updateQueueModeUI();
     return;
   }
-  
+
   infoContainer.classList.remove('hidden');
+
+  // Update queue mode UI based on selection count
+  updateQueueModeUI();
 
   // Check if media is available for AI toggle
   const mediaData = getSelectedPostMedia();
@@ -433,8 +446,17 @@ function updateSelectedPostsInfo() {
 
       // Always update fields when a single post is selected
       if (selectedPosts.size === 1) {
-        captionTextarea.value = firstPost.caption || '';
-        titleInput.value = firstPost.caption || '';
+        // Use overridden values if they exist, otherwise use original values
+        // Note: Title defaults to caption value (original behavior)
+        const displayTitle = firstPost.titleOverridden ? firstPost.overriddenTitle : firstPost.caption;
+        const displayCaption = firstPost.captionOverridden ? firstPost.overriddenCaption : firstPost.caption;
+
+        captionTextarea.value = displayCaption || '';
+        titleInput.value = displayTitle || '';
+
+        // Reset edit flags since we're loading post data (not user editing)
+        userEditedTitle = false;
+        userEditedCaption = false;
 
         // Add visual feedback to show fields were updated
         captionTextarea.style.background = '#e6fffa';
@@ -443,14 +465,27 @@ function updateSelectedPostsInfo() {
           captionTextarea.style.background = '';
           titleInput.style.background = '';
         }, 1000);
+
+        // Hide save buttons initially since we're loading saved values
+        document.getElementById('saveTitleBtn').style.display = 'none';
+        document.getElementById('saveCaptionBtn').style.display = 'none';
+
+        // Add visual indicators for overridden values
+        updateOverrideIndicators(firstPost);
       } else {
         // For multiple posts, only update if fields are empty to avoid overwriting user edits
         if (!captionTextarea.value.trim()) {
-          captionTextarea.value = firstPost.caption || '';
+          const displayCaption = firstPost.captionOverridden ? firstPost.overriddenCaption : firstPost.caption;
+          captionTextarea.value = displayCaption || '';
         }
         if (!titleInput.value.trim()) {
-          titleInput.value = firstPost.caption || '';
+          const displayTitle = firstPost.titleOverridden ? firstPost.overriddenTitle : firstPost.caption;
+          titleInput.value = displayTitle || '';
         }
+
+        // Hide save buttons for multiple selection
+        document.getElementById('saveTitleBtn').style.display = 'none';
+        document.getElementById('saveCaptionBtn').style.display = 'none';
       }
 
       // Update character count
@@ -1033,6 +1068,27 @@ function setupEventListeners() {
   // AI Rewrite buttons
   setupRewriteButtonListeners();
 
+  // Save buttons for title and caption
+  const saveTitleBtn = document.getElementById('saveTitleBtn');
+  const saveCaptionBtn = document.getElementById('saveCaptionBtn');
+  const postTitle = document.getElementById('postTitle');
+  const postCaption = document.getElementById('postCaption');
+
+  if (saveTitleBtn && saveCaptionBtn && postTitle && postCaption) {
+    saveTitleBtn.addEventListener('click', saveTitleOverride);
+    saveCaptionBtn.addEventListener('click', saveCaptionOverride);
+
+    // Show save buttons when text changes
+    postTitle.addEventListener('input', showSaveButtonIfNeeded);
+    postCaption.addEventListener('input', showSaveButtonIfNeeded);
+
+    // Track manual edits by user
+    postTitle.addEventListener('input', () => { userEditedTitle = true; });
+    postCaption.addEventListener('input', () => { userEditedCaption = true; });
+  } else {
+    console.error('❌ Save button elements not found during setup');
+  }
+
   // Initialize platform settings
   updatePlatformSettings();
 }
@@ -1057,6 +1113,9 @@ function setupRewriteButtonListeners() {
   document.getElementById('closeEditPromptDialog').addEventListener('click', hideEditPromptDialog);
   document.getElementById('cancelEditPromptBtn').addEventListener('click', hideEditPromptDialog);
   document.getElementById('saveEditPromptBtn').addEventListener('click', saveEditedPrompt);
+
+  // Queue mode listeners
+  document.getElementById('stopQueueBtn').addEventListener('click', stopQueueRewrite);
 }
 
 function updateCaptionCharCount() {
@@ -1094,6 +1153,199 @@ function autoResizeTextarea() {
 function syncTitleToCaption() {
   // Optional: sync title changes to caption if user wants
   // This could be made configurable
+}
+
+// Save/Override functionality for title and caption
+async function saveTitleOverride() {
+  if (selectedPosts.size !== 1) {
+    showMessage('❌ Please select exactly one post to save title override', 'error');
+    return;
+  }
+
+  const postId = Array.from(selectedPosts)[0];
+  const post = window.getPostById(postId);
+  if (!post) {
+    showMessage('❌ Post not found', 'error');
+    return;
+  }
+
+  const titleInput = document.getElementById('postTitle');
+  const newTitle = titleInput.value.trim();
+
+  try {
+    // Save the overridden title
+    post.overriddenTitle = newTitle;
+    post.titleOverridden = true;
+    post.titleOverriddenAt = new Date().toISOString();
+
+    // Save to storage
+    await savePostData();
+
+    // Visual feedback
+    const saveBtn = document.getElementById('saveTitleBtn');
+    saveBtn.textContent = '✅ Saved';
+    saveBtn.classList.add('saved');
+
+    // Update visual indicators
+    updateOverrideIndicators(post);
+
+    setTimeout(() => {
+      saveBtn.textContent = '💾 Save';
+      saveBtn.classList.remove('saved');
+      saveBtn.style.display = 'none';
+    }, 2000);
+
+    showMessage('✅ Title override saved successfully!', 'success');
+    console.log('Title override saved for post:', postId, 'New title:', newTitle);
+
+  } catch (error) {
+    console.error('Failed to save title override:', error);
+    showMessage('❌ Failed to save title override', 'error');
+  }
+}
+
+async function saveCaptionOverride() {
+  if (selectedPosts.size !== 1) {
+    showMessage('❌ Please select exactly one post to save caption override', 'error');
+    return;
+  }
+
+  const postId = Array.from(selectedPosts)[0];
+  const post = window.getPostById(postId);
+  if (!post) {
+    showMessage('❌ Post not found', 'error');
+    return;
+  }
+
+  const captionTextarea = document.getElementById('postCaption');
+  const newCaption = captionTextarea.value.trim();
+
+  try {
+    // Save the overridden caption
+    post.overriddenCaption = newCaption;
+    post.captionOverridden = true;
+    post.captionOverriddenAt = new Date().toISOString();
+
+    // Save to storage
+    await savePostData();
+
+    // Visual feedback
+    const saveBtn = document.getElementById('saveCaptionBtn');
+    saveBtn.textContent = '✅ Saved';
+    saveBtn.classList.add('saved');
+
+    // Update visual indicators
+    updateOverrideIndicators(post);
+
+    setTimeout(() => {
+      saveBtn.textContent = '💾 Save';
+      saveBtn.classList.remove('saved');
+      saveBtn.style.display = 'none';
+    }, 2000);
+
+    showMessage('✅ Caption override saved successfully!', 'success');
+    console.log('Caption override saved for post:', postId, 'New caption:', newCaption);
+
+  } catch (error) {
+    console.error('Failed to save caption override:', error);
+    showMessage('❌ Failed to save caption override', 'error');
+  }
+}
+
+function showSaveButtonIfNeeded() {
+  if (selectedPosts.size !== 1) return;
+
+  const postId = Array.from(selectedPosts)[0];
+  const post = window.getPostById(postId);
+  if (!post) return;
+
+  const titleInput = document.getElementById('postTitle');
+  const captionTextarea = document.getElementById('postCaption');
+  const saveTitleBtn = document.getElementById('saveTitleBtn');
+  const saveCaptionBtn = document.getElementById('saveCaptionBtn');
+
+  if (!titleInput || !captionTextarea || !saveTitleBtn || !saveCaptionBtn) {
+    console.error('❌ Save button elements not found');
+    return;
+  }
+
+  // Get the current values that should be displayed (original or overridden)
+  // Note: Title defaults to caption value (original behavior)
+  const currentTitle = post.titleOverridden ? post.overriddenTitle : post.caption;
+  const currentCaption = post.captionOverridden ? post.overriddenCaption : post.caption;
+
+  // Show save button if the input value differs from the current saved value
+  const titleChanged = titleInput.value.trim() !== (currentTitle || '').trim();
+  const captionChanged = captionTextarea.value.trim() !== (currentCaption || '').trim();
+
+  console.log('🔍 Checking changes:', {
+    titleInput: `"${titleInput.value.trim()}"`,
+    currentTitle: `"${(currentTitle || '').trim()}"`,
+    titleChanged: titleChanged,
+    captionInput: `"${captionTextarea.value.trim()}"`,
+    currentCaption: `"${(currentCaption || '').trim()}"`,
+    captionChanged: captionChanged
+  });
+
+  if (titleChanged) {
+    saveTitleBtn.style.display = 'inline-block';
+    // Add subtle pulse animation to draw attention
+    saveTitleBtn.style.animation = 'pulse 0.5s ease-in-out';
+    setTimeout(() => {
+      saveTitleBtn.style.animation = '';
+    }, 500);
+    console.log('✅ Showing title save button');
+  } else {
+    saveTitleBtn.style.display = 'none';
+  }
+
+  if (captionChanged) {
+    saveCaptionBtn.style.display = 'inline-block';
+    // Add subtle pulse animation to draw attention
+    saveCaptionBtn.style.animation = 'pulse 0.5s ease-in-out';
+    setTimeout(() => {
+      saveCaptionBtn.style.animation = '';
+    }, 500);
+    console.log('✅ Showing caption save button');
+  } else {
+    saveCaptionBtn.style.display = 'none';
+  }
+}
+
+function updateOverrideIndicators(post) {
+  const titleInput = document.getElementById('postTitle');
+  const captionTextarea = document.getElementById('postCaption');
+
+  // Find the correct labels by looking for the ones that contain the text
+  const allLabels = document.querySelectorAll('.form-label');
+  let actualTitleLabel = null;
+  let actualCaptionLabel = null;
+
+  allLabels.forEach(label => {
+    if (label.textContent.includes('Post Title')) {
+      actualTitleLabel = label;
+    } else if (label.textContent.includes('Caption')) {
+      actualCaptionLabel = label;
+    }
+  });
+
+  // Update title indicators
+  if (post.titleOverridden) {
+    titleInput.classList.add('overridden');
+    if (actualTitleLabel) actualTitleLabel.classList.add('has-override');
+  } else {
+    titleInput.classList.remove('overridden');
+    if (actualTitleLabel) actualTitleLabel.classList.remove('has-override');
+  }
+
+  // Update caption indicators
+  if (post.captionOverridden) {
+    captionTextarea.classList.add('overridden');
+    if (actualCaptionLabel) actualCaptionLabel.classList.add('has-override');
+  } else {
+    captionTextarea.classList.remove('overridden');
+    if (actualCaptionLabel) actualCaptionLabel.classList.remove('has-override');
+  }
 }
 
 function selectAllPosts() {
@@ -1864,12 +2116,46 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
     try {
       const platformSettings = getPlatformSpecificSettings();
 
+      // Determine title and caption for this specific post
+      // If user manually edited the form fields, use those for all posts
+      // Otherwise, use each post's individual title/caption (with overrides)
+      let finalTitle, finalCaption;
+
+      if (userEditedTitle && title && title.trim()) {
+        // User manually edited the title field - use for all posts
+        finalTitle = title.trim();
+      } else {
+        // Use individual post's title (with override if exists)
+        finalTitle = post.titleOverridden ? post.overriddenTitle : post.caption;
+      }
+
+      if (userEditedCaption && caption && caption.trim()) {
+        // User manually edited the caption field - use for all posts
+        finalCaption = caption.trim();
+      } else {
+        // Use individual post's caption (with override if exists)
+        finalCaption = post.captionOverridden ? post.overriddenCaption : post.caption;
+      }
+
+      console.log(`📝 Post ${i + 1} scheduling details:`, {
+        postId: post.id,
+        formTitle: title,
+        formCaption: caption,
+        userEditedTitle: userEditedTitle,
+        userEditedCaption: userEditedCaption,
+        finalTitle: finalTitle,
+        finalCaption: finalCaption,
+        postOriginalCaption: post.caption,
+        postTitleOverridden: post.titleOverridden,
+        postCaptionOverridden: post.captionOverridden
+      });
+
       const scheduleOptions = {
         imageUrl: post.imageUrl,
-        caption: caption || post.caption,
+        caption: finalCaption,
         channelIds: channels,
         scheduleAt: scheduleTime.toISOString(),
-        title: title,
+        title: finalTitle,
         isTextOnly: post.isTextOnly || false,
         platformSettings: platformSettings
       };
@@ -2545,6 +2831,12 @@ async function handleRewriteClick(event) {
     return;
   }
 
+  // Check if multiple posts are selected (queue mode)
+  if (selectedPosts.size > 1) {
+    await startQueueRewrite(target, promptType);
+    return;
+  }
+
   // Get the current text
   const textElement = target === 'title'
     ? document.getElementById('postTitle')
@@ -2622,7 +2914,7 @@ async function handleRewriteClick(event) {
       console.log('📝 Using text-only AI (no media selected)');
       rewrittenText = await window.geminiAPI.rewriteText(currentText, promptData.prompt);
 
-      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten successfully!`, 'success');
+      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten! Click the 💾 Save button to keep it.`, 'success');
     }
 
     // Update the text field
@@ -2632,6 +2924,9 @@ async function handleRewriteClick(event) {
     if (target === 'caption') {
       updateCaptionCharCount();
     }
+
+    // Show save buttons immediately after AI generation
+    showSaveButtonIfNeeded();
 
     // Show success feedback
     textElement.style.background = isMultimodal ? '#e6fff0' : '#e6fffa';
@@ -2870,7 +3165,7 @@ async function applyCustomPrompt() {
       console.log('📝 Using custom text-only AI (no media selected)');
       rewrittenText = await window.geminiAPI.rewriteText(currentText, promptText);
 
-      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten with custom prompt!`, 'success');
+      showMessage(`✅ ${target.charAt(0).toUpperCase() + target.slice(1)} rewritten! Click the 💾 Save button to keep it.`, 'success');
     }
 
     // Update the text field
@@ -2880,6 +3175,9 @@ async function applyCustomPrompt() {
     if (target === 'caption') {
       updateCaptionCharCount();
     }
+
+    // Show save buttons immediately after AI generation
+    showSaveButtonIfNeeded();
 
     // Show success feedback
     textElement.style.background = isMultimodal ? '#e6fff0' : '#e6fffa';
@@ -3717,6 +4015,46 @@ async function handleStorageQuotaExceeded() {
 
 // Global functions are now defined at the top of the file
 
+// Test function for save/override functionality
+window.testSaveFeature = async function() {
+  console.log('🧪 Testing save/override feature...');
+
+  // Create test data if no posts exist
+  if (Object.keys(savedItems).length === 0) {
+    console.log('📝 Creating test data...');
+
+    const testPost = {
+      id: 'test_' + Date.now(),
+      title: 'Test Image',
+      caption: 'This is a test caption for testing the save feature',
+      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzMzNzNkYyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCI+VGVzdCBJbWFnZTwvdGV4dD48L3N2Zz4=',
+      category: 'Test',
+      timestamp: Date.now(),
+      source: 'test'
+    };
+
+    savedItems['Test'] = [testPost];
+    categories = ['Test'];
+
+    // Save to storage
+    await new Promise(resolve => {
+      chrome.storage.local.set({ savedItems, categories }, resolve);
+    });
+
+    // Refresh UI
+    await loadSavedData();
+
+    console.log('✅ Test data created');
+  }
+
+  console.log('📋 Instructions:');
+  console.log('1. Select a post from the list');
+  console.log('2. Edit the title or caption');
+  console.log('3. Save buttons should appear automatically');
+  console.log('4. Click save to override the values');
+  console.log('5. Select another post and come back - your saved values should load');
+};
+
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   // Load custom presets first
@@ -3728,7 +4066,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load saved links
   await loadSavedLinks();
 
-  setupEventListeners();
+  // setupEventListeners(); // Already called in initializeAdvancedScheduler()
   setupRewriteButtonListeners();
   updateCaptionCharCount();
   updateTimezoneInfo();
@@ -3744,6 +4082,223 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize AI image editor module (will be initialized on demand)
   console.log('🔄 AI Image Editor Module will be initialized when needed');
 });
+
+// Queue-based Rewrite Functionality
+let queueRewriteInProgress = false;
+let queueRewriteAborted = false;
+let currentQueueOperation = null;
+
+// Queue rewrite for multiple posts using existing prompts
+async function startQueueRewrite(target, promptType) {
+  if (selectedPosts.size < 2) {
+    // For single post, use existing functionality
+    return handleRewriteClick({ target: { dataset: { target, prompt: promptType } } });
+  }
+
+  if (queueRewriteInProgress) {
+    showMessage('❌ Queue rewrite already in progress', 'error');
+    return;
+  }
+
+  // Ensure Gemini API is available
+  if (!window.geminiAPI) {
+    showMessage('❌ AI rewrite service not available. Please check your API configuration.', 'error');
+    return;
+  }
+
+  // Get the prompt data
+  const promptData = getPromptData(target, promptType);
+  if (!promptData) {
+    showMessage('❌ Invalid prompt configuration', 'error');
+    return;
+  }
+
+  // Initialize queue processing
+  queueRewriteInProgress = true;
+  queueRewriteAborted = false;
+  currentQueueOperation = { target, promptType, promptData };
+
+  const postsArray = Array.from(selectedPosts);
+  const totalPosts = postsArray.length;
+  let completedPosts = 0;
+  let successCount = 0;
+  let errorCount = 0;
+
+  // Show queue mode UI
+  showQueueModeIndicator(true, target, promptData.name);
+  updateQueueProgress(0, totalPosts);
+
+  showMessage(`🔄 Starting queue rewrite: ${promptData.name} for ${totalPosts} posts`, 'info');
+
+  try {
+    for (let i = 0; i < postsArray.length; i++) {
+      if (queueRewriteAborted) {
+        showMessage('⏹️ Queue rewrite stopped by user', 'info');
+        break;
+      }
+
+      const postId = postsArray[i];
+      const post = window.getPostById(postId);
+
+      if (!post) {
+        console.error(`Post ${i + 1}: Post not found`);
+        errorCount++;
+        completedPosts++;
+        updateQueueProgress(completedPosts, totalPosts);
+        continue;
+      }
+
+      try {
+        // Get current text based on target
+        const currentText = getCurrentTextForPost(post, target);
+
+        if (!currentText.trim()) {
+          console.log(`Post ${i + 1}: Skipped ${target} (empty)`);
+          completedPosts++;
+          updateQueueProgress(completedPosts, totalPosts);
+          continue;
+        }
+
+        // Rewrite the text
+        const rewrittenText = await rewriteWithMedia(currentText, promptData.prompt, post.imageUrl);
+
+        // Save the rewritten text
+        if (target === 'title') {
+          post.overriddenTitle = rewrittenText.trim();
+          post.titleOverridden = true;
+          post.titleOverriddenAt = new Date().toISOString();
+        } else {
+          post.overriddenCaption = rewrittenText.trim();
+          post.captionOverridden = true;
+          post.captionOverriddenAt = new Date().toISOString();
+        }
+
+        // Save immediately to prevent data loss
+        await savePostData();
+
+        successCount++;
+        console.log(`Post ${i + 1}: ${target} rewritten successfully`);
+
+        // Add a small delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error(`Post ${i + 1}: Failed to rewrite ${target} - ${error.message}`);
+        errorCount++;
+      }
+
+      completedPosts++;
+      updateQueueProgress(completedPosts, totalPosts);
+    }
+
+    // Final summary
+    if (!queueRewriteAborted) {
+      const summary = `✅ Queue rewrite completed! ${successCount} successful, ${errorCount} errors`;
+      showMessage(summary, successCount > errorCount ? 'success' : 'warning');
+
+      // Refresh the UI to show updated content if single post selected
+      if (selectedPosts.size === 1) {
+        updateSelectedPostsInfo();
+      }
+    }
+
+  } catch (error) {
+    console.error('Queue rewrite failed:', error);
+    showMessage('❌ Queue rewrite operation failed', 'error');
+  } finally {
+    queueRewriteInProgress = false;
+    currentQueueOperation = null;
+    showQueueModeIndicator(false);
+  }
+}
+
+function getCurrentTextForPost(post, target) {
+  if (target === 'title') {
+    return post.titleOverridden ? post.overriddenTitle : (post.caption || '');
+  } else {
+    return post.captionOverridden ? post.overriddenCaption : (post.caption || '');
+  }
+}
+
+function getPromptData(target, promptType) {
+  const prompts = window.geminiRewritePrompts;
+  if (!prompts || !prompts[target]) return null;
+
+  return prompts[target].find(p => p.name.toLowerCase().replace(/\s+/g, ' ') === promptType.replace(/\s+/g, ' '));
+}
+
+function stopQueueRewrite() {
+  queueRewriteAborted = true;
+  showMessage('⏹️ Stopping queue rewrite...', 'info');
+}
+
+// Queue Mode UI Functions
+function updateQueueModeUI() {
+  const titleButtons = document.getElementById('titleRewriteButtons');
+  const captionButtons = document.getElementById('captionRewriteButtons');
+
+  if (selectedPosts.size > 1) {
+    // Enable queue mode
+    if (titleButtons) titleButtons.classList.add('queue-mode');
+    if (captionButtons) captionButtons.classList.add('queue-mode');
+  } else {
+    // Disable queue mode
+    if (titleButtons) titleButtons.classList.remove('queue-mode');
+    if (captionButtons) captionButtons.classList.remove('queue-mode');
+  }
+}
+
+function showQueueModeIndicator(show, target = '', promptName = '') {
+  const indicator = document.getElementById('queueModeIndicator');
+  if (!indicator) return;
+
+  if (show) {
+    indicator.classList.add('active');
+    indicator.querySelector('span').textContent = `🔄 Queue Rewrite: ${promptName} (${target})`;
+  } else {
+    indicator.classList.remove('active');
+  }
+}
+
+function updateQueueProgress(completed, total) {
+  const progressFill = document.getElementById('queueProgressFill');
+  const progressText = document.getElementById('queueProgressText');
+
+  if (progressFill && progressText) {
+    const percentage = total > 0 ? (completed / total) * 100 : 0;
+    progressFill.style.width = `${percentage}%`;
+    progressText.textContent = `${completed}/${total}`;
+  }
+}
+
+async function rewriteWithMedia(originalText, instruction, mediaUrl, maxRetries = 3) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Try multimodal rewrite if media is available
+      if (mediaUrl && window.geminiAPI.rewriteTextWithMedia) {
+        return await window.geminiAPI.rewriteTextWithMedia(originalText, instruction, mediaUrl);
+      } else {
+        // Fall back to text-only rewrite
+        return await window.geminiAPI.rewriteText(originalText, instruction);
+      }
+    } catch (error) {
+      lastError = error;
+      console.error(`Rewrite attempt ${attempt} failed:`, error);
+
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5 seconds
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // If all retries failed, throw the last error
+  throw new Error(`Failed after ${maxRetries} attempts: ${lastError.message}`);
+}
 
 // Text-only filter functionality
 function toggleTextOnlyFilter() {

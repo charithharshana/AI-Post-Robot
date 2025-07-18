@@ -534,6 +534,52 @@
       min-width: auto;
     }
 
+    .btn-save {
+      background: #48bb78;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-save:hover {
+      background: #38a169;
+      transform: translateY(-1px);
+    }
+
+    .btn-save:active {
+      transform: translateY(0);
+    }
+
+    .btn-save.saved {
+      background: #38a169;
+      animation: pulse 0.5s ease-in-out;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .form-textarea.overridden,
+    .resizable-title.overridden {
+      border-left: 3px solid #48bb78;
+      background-color: #f0fff4;
+    }
+
+    .form-label.has-override {
+      color: #38a169;
+      font-weight: 600;
+    }
+
+    .form-label.has-override::after {
+      content: " ✓";
+      color: #48bb78;
+      font-size: 12px;
+    }
+
     .btn-ai {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
@@ -588,6 +634,65 @@
       display: flex;
       align-items: center;
       gap: 2px;
+    }
+
+    /* Queue Mode Styles */
+    .queue-mode-indicator {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .queue-mode-indicator.active {
+      display: flex;
+    }
+
+    .queue-progress {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      height: 4px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .queue-progress-fill {
+      background: white;
+      height: 100%;
+      transition: width 0.3s ease;
+      border-radius: 10px;
+    }
+
+    .rewrite-buttons.queue-mode .btn-ai {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .rewrite-buttons.queue-mode .btn-ai::after {
+      content: '🔄 Queue Mode';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(102, 126, 234, 0.9);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .rewrite-buttons.queue-mode .btn-ai:hover::after {
+      opacity: 1;
     }
 
     .edit-prompt-btn {
@@ -808,7 +913,7 @@
           <!-- TikTok Settings -->
           <div id="tiktokSettings" class="platform-settings" style="display: none;">
             <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 8px; font-size: 11px; color: #6c757d; margin-bottom: 8px;">
-              🎵 TikTok title uses main post title
+              🎵 Video title uses main post title • 📝 Video content uses main caption
             </div>
             <div class="form-group">
               <label class="form-label">🔒 Privacy Level</label>
@@ -883,6 +988,9 @@
 
           <!-- Facebook Settings -->
           <div id="facebookSettings" class="platform-settings" style="display: none;">
+            <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 8px; font-size: 11px; color: #6c757d; margin-bottom: 8px;">
+              📘 Post content uses main caption • 📷 Media from selected images/videos
+            </div>
             <div class="form-group">
               <label class="form-label">📘 Facebook Post Type</label>
               <select class="form-input" id="facebookPostType">
@@ -894,6 +1002,9 @@
 
           <!-- Instagram Settings -->
           <div id="instagramSettings" class="platform-settings" style="display: none;">
+            <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 8px; font-size: 11px; color: #6c757d; margin-bottom: 8px;">
+              📷 Post content uses main caption • 📷 Media from selected images/videos
+            </div>
             <div class="form-group">
               <label class="form-label">📷 Instagram Post Type</label>
               <select class="form-input" id="instagramPostType">
@@ -906,6 +1017,9 @@
 
           <!-- Google My Business Settings -->
           <div id="gmbSettings" class="platform-settings" style="display: none;">
+            <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 8px; font-size: 11px; color: #6c757d; margin-bottom: 8px;">
+              🏢 Post content uses main caption • 📷 Media from selected images/videos
+            </div>
             <div class="form-group">
               <label class="form-label">🏢 GMB Post Type</label>
               <select class="form-input" id="gmbPostTopicType">
@@ -979,8 +1093,20 @@
           </div>
         </div>
         
+        <!-- Queue Mode Indicator -->
+        <div class="queue-mode-indicator" id="queueModeIndicator">
+          <span>🔄 Queue Rewrite Mode</span>
+          <div class="queue-progress">
+            <div class="queue-progress-fill" id="queueProgressFill" style="width: 0%;"></div>
+          </div>
+          <span id="queueProgressText">0/0</span>
+          <button class="btn btn-small" id="stopQueueBtn" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">⏹️ Stop</button>
+        </div>
+
         <div class="form-group">
-          <label class="form-label">📝 Post Title</label>
+          <label class="form-label">📝 Post Title
+            <button class="btn btn-small btn-save" id="saveTitleBtn" title="Save/Override Title" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: none;">💾 Save</button>
+          </label>
           <textarea class="form-textarea resizable-title" id="postTitle" rows="1" placeholder="Enter post title (optional)"></textarea>
           <div class="rewrite-buttons" id="titleRewriteButtons">
             <div class="prompt-button-group">
@@ -1004,7 +1130,9 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">📄 Caption</label>
+          <label class="form-label">📄 Caption
+            <button class="btn btn-small btn-save" id="saveCaptionBtn" title="Save/Override Caption" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: none;">💾 Save</button>
+          </label>
           <textarea class="form-textarea" id="postCaption" placeholder="Enter or edit caption..."></textarea>
           <div class="rewrite-buttons" id="captionRewriteButtons">
             <div class="prompt-button-group">
@@ -1026,7 +1154,7 @@
             <button class="btn btn-small btn-ai" data-target="caption" data-prompt="custom">➕ Custom</button>
           </div>
         </div>
-        
+
         <div class="form-group">
           <label class="form-label">🔗 Links</label>
 

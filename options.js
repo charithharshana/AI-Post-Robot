@@ -267,14 +267,19 @@ function loadChannelsList(channelsData, defaultChannels) {
             </div>
           </div>
           <select class="platform-selector" data-channel-id="${channel.id}">
-            <option value="facebook" ${detectedPlatform === 'facebook' ? 'selected' : ''}>📘 FB</option>
-            <option value="instagram" ${detectedPlatform === 'instagram' ? 'selected' : ''}>📷 IG</option>
-            <option value="pinterest" ${detectedPlatform === 'pinterest' ? 'selected' : ''}>📌 PIN</option>
-            <option value="youtube" ${detectedPlatform === 'youtube' ? 'selected' : ''}>📺 YT</option>
-            <option value="tiktok" ${detectedPlatform === 'tiktok' ? 'selected' : ''}>🎵 TT</option>
-            <option value="wordpress" ${detectedPlatform === 'wordpress' ? 'selected' : ''}>📝 WP</option>
-            <option value="gmb" ${detectedPlatform === 'gmb' ? 'selected' : ''}>🏢 GMB</option>
-            <option value="unknown" ${detectedPlatform === 'unknown' ? 'selected' : ''}>❓ ???</option>
+            <option value="facebook" ${detectedPlatform === 'facebook' ? 'selected' : ''}>📘 Facebook</option>
+            <option value="instagram" ${detectedPlatform === 'instagram' ? 'selected' : ''}>📷 Instagram</option>
+            <option value="pinterest" ${detectedPlatform === 'pinterest' ? 'selected' : ''}>📌 Pinterest</option>
+            <option value="youtube" ${detectedPlatform === 'youtube' ? 'selected' : ''}>📺 YouTube</option>
+            <option value="tiktok" ${detectedPlatform === 'tiktok' ? 'selected' : ''}>🎵 TikTok</option>
+            <option value="twitter" ${detectedPlatform === 'twitter' ? 'selected' : ''}>🐦 Twitter/X</option>
+            <option value="linkedin" ${detectedPlatform === 'linkedin' ? 'selected' : ''}>💼 LinkedIn</option>
+            <option value="threads" ${detectedPlatform === 'threads' ? 'selected' : ''}>🧵 Threads</option>
+            <option value="telegram" ${detectedPlatform === 'telegram' ? 'selected' : ''}>✈️ Telegram</option>
+            <option value="bluesky" ${detectedPlatform === 'bluesky' ? 'selected' : ''}>🦋 Bluesky</option>
+            <option value="wordpress" ${detectedPlatform === 'wordpress' ? 'selected' : ''}>📝 WordPress</option>
+            <option value="gmb" ${detectedPlatform === 'gmb' ? 'selected' : ''}>🏢 Google My Business</option>
+            <option value="unknown" ${detectedPlatform === 'unknown' ? 'selected' : ''}>❓ Other Platform</option>
           </select>
         </div>
       `;
@@ -313,37 +318,49 @@ function detectPlatform(channel) {
 
   // Platform detection based on name patterns
   if (name.includes('facebook') || url.includes('facebook.com')) {
-    return 'Facebook';
+    return 'facebook';
   }
   if (name.includes('instagram') || url.includes('instagram.com')) {
-    return 'Instagram';
+    return 'instagram';
   }
   if (name.includes('twitter') || url.includes('twitter.com') || url.includes('x.com')) {
-    return 'Twitter';
+    return 'twitter';
   }
   if (name.includes('linkedin') || url.includes('linkedin.com')) {
-    return 'LinkedIn';
+    return 'linkedin';
   }
   if (name.includes('pinterest') || url.includes('pinterest.com')) {
-    return 'Pinterest';
+    return 'pinterest';
   }
   if (name.includes('youtube') || url.includes('youtube.com')) {
-    return 'YouTube';
+    return 'youtube';
   }
   if (name.includes('tiktok') || url.includes('tiktok.com')) {
-    return 'TikTok';
+    return 'tiktok';
   }
   if (name.includes('threads') || url.includes('threads.net')) {
-    return 'Threads';
+    return 'threads';
+  }
+  if (name.includes('telegram') || url.includes('telegram.org') || url.includes('t.me')) {
+    return 'telegram';
+  }
+  if (name.includes('bluesky') || url.includes('bsky.app') || url.includes('bluesky.social')) {
+    return 'bluesky';
+  }
+  if (name.includes('wordpress') || url.includes('wordpress.com') || url.includes('wp.com')) {
+    return 'wordpress';
+  }
+  if (name.includes('gmb') || name.includes('google my business') || name.includes('google business') || name.includes('mybusiness')) {
+    return 'gmb';
   }
 
   // Check channel type or other properties
   if (channel.type) {
-    return channel.type;
+    return channel.type.toLowerCase();
   }
 
   // Default fallback
-  return 'Social Platform';
+  return 'unknown';
 }
 
 function getPlatformIcon(platform) {
@@ -353,6 +370,11 @@ function getPlatformIcon(platform) {
     'pinterest': '📌',
     'youtube': '📺',
     'tiktok': '🎵',
+    'twitter': '🐦',
+    'linkedin': '💼',
+    'threads': '🧵',
+    'telegram': '✈️',
+    'bluesky': '🦋',
     'wordpress': '📝',
     'gmb': '🏢',
     'unknown': '❓'
@@ -377,7 +399,7 @@ function savePlatformMapping(event) {
       const channelItem = event.target.closest('.channel-item');
       const channelName = channelItem.querySelector('.channel-name');
       const icon = getPlatformIcon(platform);
-      const nameText = channelName.textContent.replace(/^[📘📷📌📺🎵📝🏢❓📱]\s*/, '');
+      const nameText = channelName.textContent.replace(/^[📘📷📌📺🎵🐦💼🧵✈️🦋📝🏢❓📱]\s*/, '');
       channelName.textContent = `${icon} ${nameText}`;
     });
   });

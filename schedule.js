@@ -2,6 +2,8 @@
 let savedItems = {};
 let categories = [];
 let selectedItems = [];
+let channelsData = [];
+let channelPlatformMappings = {};
 
 document.addEventListener('DOMContentLoaded', function() {
   initializeSchedulePage();
@@ -19,6 +21,9 @@ async function initializeSchedulePage() {
 
     // Load saved data
     await loadSavedData();
+
+    // Load channels data
+    await loadChannels();
 
     // Setup event listeners
     setupEventListeners();
@@ -71,12 +76,123 @@ async function loadSavedData() {
   });
 }
 
+async function loadChannels() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['channelsData', 'channelPlatformMappings'], (result) => {
+      channelsData = result.channelsData || [];
+      channelPlatformMappings = result.channelPlatformMappings || {};
+      displayChannels();
+      resolve();
+    });
+  });
+}
+
+function displayChannels() {
+  const channelsList = document.getElementById('channelsList');
+
+  if (channelsData.length === 0) {
+    channelsList.innerHTML = '<div class="loading">❌ No channels found. Please configure API in settings.</div>';
+    return;
+  }
+
+  // Use stored platform mappings
+  const platformMappings = channelPlatformMappings || {};
+
+  let html = '';
+  channelsData.forEach(channel => {
+    // Use saved platform mapping or detect platform
+    const savedPlatform = platformMappings[channel.id];
+    const detectedPlatform = savedPlatform || detectPlatform(channel);
+    const platformIcon = getPlatformIcon(detectedPlatform);
+    html += `
+      <div class="channel-option">
+        <input type="checkbox" value="${channel.id}" id="channel_${channel.id}" data-platform="${detectedPlatform.toLowerCase()}">
+        <label for="channel_${channel.id}">${platformIcon} ${channel.name || channel.username || 'Unnamed'}</label>
+      </div>
+    `;
+  });
+
+  channelsList.innerHTML = html;
+}
+
+function detectPlatform(channel) {
+  // Try multiple ways to detect the platform
+  if (channel.platform) {
+    return channel.platform;
+  }
+
+  // Check channel name or username for platform indicators
+  const name = (channel.name || channel.username || '').toLowerCase();
+  const url = (channel.url || '').toLowerCase();
+
+  // Platform detection based on name patterns - Only RoboPost API supported platforms
+  if (name.includes('facebook') || url.includes('facebook.com')) {
+    return 'facebook';
+  }
+  if (name.includes('instagram') || url.includes('instagram.com')) {
+    return 'instagram';
+  }
+  if (name.includes('pinterest') || url.includes('pinterest.com')) {
+    return 'pinterest';
+  }
+  if (name.includes('youtube') || url.includes('youtube.com')) {
+    return 'youtube';
+  }
+  if (name.includes('tiktok') || url.includes('tiktok.com')) {
+    return 'tiktok';
+  }
+  if (name.includes('wordpress') || url.includes('wordpress.com') || url.includes('wp.com')) {
+    return 'wordpress';
+  }
+  if (name.includes('gmb') || name.includes('google my business') || name.includes('google business') || name.includes('mybusiness')) {
+    return 'gmb';
+  }
+
+  // Check channel type or other properties
+  if (channel.type) {
+    const type = channel.type.toLowerCase();
+    // Map common type names to our platform identifiers
+    if (type.includes('facebook')) return 'facebook';
+    if (type.includes('instagram')) return 'instagram';
+    if (type.includes('pinterest')) return 'pinterest';
+    if (type.includes('youtube')) return 'youtube';
+    if (type.includes('tiktok')) return 'tiktok';
+    if (type.includes('wordpress')) return 'wordpress';
+    if (type.includes('gmb') || type.includes('google')) return 'gmb';
+    return type;
+  }
+
+  // Default fallback
+  return 'unknown';
+}
+
+function getPlatformIcon(platform) {
+  const icons = {
+    'facebook': '📘',
+    'instagram': '📷',
+    'pinterest': '📌',
+    'youtube': '📺',
+    'tiktok': '🎵',
+    'wordpress': '📝',
+    'gmb': '🏢',
+    'unknown': '📱'
+  };
+  return icons[platform?.toLowerCase()] || '📱';
+}
+
 async function loadDefaultSettings() {
   // Load settings from storage
   chrome.storage.local.get(['defaultChannels', 'defaultDelay'], (result) => {
     // Set default channels from storage
     if (result.defaultChannels) {
-      document.getElementById('channelIds').value = result.defaultChannels;
+      const defaultChannelIds = result.defaultChannels.split('\n').map(id => id.trim()).filter(id => id);
+      // Check the corresponding checkboxes
+      defaultChannelIds.forEach(channelId => {
+        const checkbox = document.getElementById(`channel_${channelId}`);
+        if (checkbox) {
+          checkbox.checked = true;
+        }
+      });
     }
 
     // Set default start time (current time + default delay)
@@ -166,7 +282,7 @@ async function confirmScheduling() {
   const interval = parseInt(document.getElementById('interval').value);
   
   if (channelIds.length === 0) {
-    showMessage('configMessage', 'Please enter at least one channel ID', 'error');
+    showMessage('configMessage', 'Please select at least one channel', 'error');
     return;
   }
   
@@ -293,8 +409,11 @@ function clearScheduledCategory() {
 }
 
 function getChannelIds() {
-  const channelText = document.getElementById('channelIds').value.trim();
-  return channelText ? channelText.split('\n').map(id => id.trim()).filter(id => id) : [];
+  const selectedChannels = [];
+  document.querySelectorAll('#channelsList input:checked').forEach(checkbox => {
+    selectedChannels.push(checkbox.value);
+  });
+  return selectedChannels;
 }
 
 function showSection(sectionId) {
