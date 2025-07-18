@@ -9,3 +9,11 @@ docs/robopost_scheduler_complete.py
 
 # Ignore prebuilt-plugin directory (contains source code and build files)
 image-editor-module/prebuilt-plugin/
+
+# Ignore development and documentation files
+docs/api more.txt
+PLATFORM_SETTINGS_IMPLEMENTATION.md
+
+# Ignore VS Code and editor settings
+.vscode/
+.zencoder/
