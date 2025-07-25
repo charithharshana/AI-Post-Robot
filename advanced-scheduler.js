@@ -66,6 +66,17 @@ async function initializeAdvancedScheduler() {
       await window.geminiAPI.initialize();
     }
 
+    // Initialize original prompts backup
+    if (window.initializeOriginalPrompts) {
+      window.initializeOriginalPrompts();
+    }
+
+    // Load custom prompts from storage
+    if (window.loadCustomPrompts) {
+      await window.loadCustomPrompts();
+      console.log('✅ Custom prompts loaded');
+    }
+
     // AI Image Editor Module will be initialized on demand
     console.log('🔄 AI Image Editor Module will be loaded when needed');
 
@@ -86,6 +97,10 @@ async function initializeAdvancedScheduler() {
 
     // Initialize button states
     updateEditButtonState();
+
+    // Update prompt buttons to show custom prompts
+    updatePromptButtons();
+
     console.log('✅ Advanced Scheduler initialized successfully');
 
   } catch (error) {
@@ -1016,6 +1031,9 @@ function setupEventListeners() {
   document.getElementById('confirmCsvImportBtn').addEventListener('click', confirmCsvImport);
   document.getElementById('cancelCsvImportBtn').addEventListener('click', hideCsvImport);
 
+  // CSV Export button
+  document.getElementById('csvExportBtn').addEventListener('click', exportToCsv);
+
 
 
   // Schedule buttons
@@ -1108,6 +1126,16 @@ function setupRewriteButtonListeners() {
   document.getElementById('closeCustomPromptDialog').addEventListener('click', hideCustomPromptDialog);
   document.getElementById('cancelCustomPromptBtn').addEventListener('click', hideCustomPromptDialog);
   document.getElementById('applyCustomPromptBtn').addEventListener('click', applyCustomPrompt);
+  document.getElementById('saveCustomPromptBtn').addEventListener('click', saveCustomPromptOnly);
+
+  // Show/hide save button based on prompt name input
+  const customPromptNameInput = document.getElementById('customPromptName');
+  if (customPromptNameInput) {
+    customPromptNameInput.addEventListener('input', toggleSaveButton);
+    console.log('✅ Custom prompt name input listener added');
+  } else {
+    console.error('❌ Custom prompt name input not found');
+  }
 
   // Edit prompt dialog listeners
   document.getElementById('closeEditPromptDialog').addEventListener('click', hideEditPromptDialog);
@@ -2750,6 +2778,82 @@ async function confirmCsvImport() {
   }
 }
 
+// CSV Export functionality
+async function exportToCsv() {
+  try {
+    // Get current saved items
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['savedItems', 'categories'], resolve);
+    });
+
+    const savedItems = result.savedItems || {};
+    const categories = result.categories || [];
+
+    // Collect all posts from all categories
+    const allPosts = [];
+    Object.keys(savedItems).forEach(category => {
+      savedItems[category].forEach(post => {
+        allPosts.push({ ...post, category });
+      });
+    });
+
+    if (allPosts.length === 0) {
+      showMessage('❌ No posts to export', 'error');
+      return;
+    }
+
+    // Create CSV content with latest titles and captions
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "imageUrl,caption,title,category,source,timestamp,isVideo,fileType\n";
+
+    allPosts.forEach(post => {
+      // Use overridden values if they exist (after rewriting), otherwise use original
+      const finalTitle = post.titleOverridden ? post.overriddenTitle : (post.title || '');
+      const finalCaption = post.captionOverridden ? post.overriddenCaption : (post.caption || '');
+
+      // Clean the text to handle CSV formatting
+      const cleanTitle = finalTitle.replace(/[\n\r]+/g, ' ').replace(/"/g, '""');
+      const cleanCaption = finalCaption.replace(/[\n\r]+/g, ' ').replace(/"/g, '""');
+      const cleanCategory = (post.category || '').replace(/"/g, '""');
+      const cleanSource = (post.source || '').replace(/"/g, '""');
+      const cleanFileType = (post.fileType || '').replace(/"/g, '""');
+
+      // Format timestamp
+      const timestamp = post.timestamp ? new Date(post.timestamp).toISOString() : '';
+
+      csvContent += `"${post.imageUrl || ''}","${cleanCaption}","${cleanTitle}","${cleanCategory}","${cleanSource}","${timestamp}","${post.isVideo || false}","${cleanFileType}"\n`;
+    });
+
+    // Create and download the file
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+
+    // Generate filename with current date
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS format
+    link.setAttribute("download", `ai-post-robot-export-${dateStr}-${timeStr}.csv`);
+
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showMessage(`✅ Successfully exported ${allPosts.length} posts to CSV`, 'success');
+
+    console.log('📤 CSV Export completed:', {
+      totalPosts: allPosts.length,
+      categories: categories.length,
+      filename: `ai-post-robot-export-${dateStr}-${timeStr}.csv`
+    });
+
+  } catch (error) {
+    console.error('❌ CSV Export failed:', error);
+    showMessage(`❌ Export failed: ${error.message}`, 'error');
+  }
+}
+
 // AI Toggle Handler
 function handleAiToggleChange(event) {
   const isEnabled = event.target.checked;
@@ -2860,13 +2964,13 @@ async function handleRewriteClick(event) {
     return;
   }
 
-  // Find the matching prompt
-  const promptData = window.geminiRewritePrompts[target]?.find(p =>
-    p.name.toLowerCase() === promptType.toLowerCase()
-  );
+  // Find the matching prompt using improved matching logic
+  const promptData = getPromptData(target, promptType.toLowerCase());
 
   if (!promptData) {
-    showMessage('❌ Prompt not found', 'error');
+    console.error(`Prompt not found: target="${target}", promptType="${promptType}"`);
+    console.error('Available prompts:', window.geminiRewritePrompts[target]?.map(p => p.name));
+    showMessage('❌ Prompt not found. Please try refreshing the page.', 'error');
     return;
   }
 
@@ -2998,6 +3102,10 @@ function showCustomPromptDialog(target) {
 
   // Clear previous input
   document.getElementById('customPromptText').value = '';
+  document.getElementById('customPromptName').value = '';
+
+  // Reset button visibility
+  toggleSaveButton();
 
   // Show dialog
   dialog.style.display = 'flex';
@@ -3008,19 +3116,47 @@ function hideCustomPromptDialog() {
   dialog.style.display = 'none';
 }
 
+function toggleSaveButton() {
+  const nameInput = document.getElementById('customPromptName');
+  const saveBtn = document.getElementById('saveCustomPromptBtn');
+  const applyBtn = document.getElementById('applyCustomPromptBtn');
+
+  if (!nameInput || !saveBtn || !applyBtn) {
+    console.error('❌ Toggle save button: Missing elements', {
+      nameInput: !!nameInput,
+      saveBtn: !!saveBtn,
+      applyBtn: !!applyBtn
+    });
+    return;
+  }
+
+  const hasName = nameInput.value.trim().length > 0;
+  console.log('🔄 Toggle save button:', { hasName, value: nameInput.value });
+
+  if (hasName) {
+    saveBtn.style.display = 'inline-block';
+    applyBtn.textContent = '✨ Apply Rewrite';
+    console.log('✅ Save button shown');
+  } else {
+    saveBtn.style.display = 'none';
+    applyBtn.textContent = '✨ Apply Rewrite';
+    console.log('ℹ️ Save button hidden');
+  }
+}
+
 function showEditPromptDialog(target, promptType) {
   const dialog = document.getElementById('editPromptDialog');
   const targetSelect = document.getElementById('editPromptTarget');
   const promptTextarea = document.getElementById('editPromptText');
   const promptNameInput = document.getElementById('editPromptName');
 
-  // Find the current prompt
-  const promptData = window.geminiRewritePrompts[target]?.find(p =>
-    p.name.toLowerCase() === promptType.toLowerCase()
-  );
+  // Find the current prompt using improved matching logic
+  const promptData = getPromptData(target, promptType.toLowerCase());
 
   if (!promptData) {
-    showMessage('❌ Prompt not found', 'error');
+    console.error(`Edit prompt not found: target="${target}", promptType="${promptType}"`);
+    console.error('Available prompts:', window.geminiRewritePrompts[target]?.map(p => p.name));
+    showMessage('❌ Prompt not found. Please try refreshing the page.', 'error');
     return;
   }
 
@@ -3054,15 +3190,24 @@ async function saveEditedPrompt() {
     return;
   }
 
-  // Find and update the prompt
-  const promptIndex = window.geminiRewritePrompts[target]?.findIndex(p =>
-    p.name.toLowerCase() === originalPromptType.toLowerCase()
-  );
+  // Find and update the prompt using improved matching logic
+  const promptIndex = window.geminiRewritePrompts[target]?.findIndex(p => {
+    const normalizedPromptName = p.name.toLowerCase().replace(/\s+/g, ' ').trim();
+    const normalizedSearchTerm = originalPromptType.toLowerCase().replace(/\s+/g, ' ').trim();
+    return normalizedPromptName === normalizedSearchTerm;
+  });
 
   if (promptIndex !== -1) {
-    window.geminiRewritePrompts[target][promptIndex].prompt = newPrompt;
-    window.geminiRewritePrompts[target][promptIndex].name = newName;
-    window.geminiRewritePrompts[target][promptIndex].modified = true;
+    const originalPrompt = window.geminiRewritePrompts[target][promptIndex];
+
+    // Store the original name if this is the first modification
+    if (!originalPrompt.originalName && !originalPrompt.modified) {
+      originalPrompt.originalName = originalPrompt.name;
+    }
+
+    originalPrompt.prompt = newPrompt;
+    originalPrompt.name = newName;
+    originalPrompt.modified = true;
 
     // Save to storage
     const customPrompts = {
@@ -3084,23 +3229,99 @@ async function saveEditedPrompt() {
 }
 
 function updatePromptButtons() {
-  // Update title buttons
-  const titleButtons = document.querySelectorAll('#titleRewriteButtons .btn-ai:not([data-prompt="custom"])');
-  titleButtons.forEach((button, index) => {
-    if (window.geminiRewritePrompts.title[index]) {
-      const prompt = window.geminiRewritePrompts.title[index];
-      button.textContent = `${prompt.icon} ${prompt.name}`;
+  updatePromptButtonsForTarget('title');
+  updatePromptButtonsForTarget('caption');
+}
+
+function updatePromptButtonsForTarget(target) {
+  const containerId = target === 'title' ? 'titleRewriteButtons' : 'captionRewriteButtons';
+  const container = document.getElementById(containerId);
+
+  if (!container) return;
+
+  // Remove existing custom prompt buttons (but keep default ones and the "Custom" button)
+  const existingCustomButtons = container.querySelectorAll('.custom-prompt-button');
+  existingCustomButtons.forEach(button => button.remove());
+
+  // Get the "Custom" button to insert new buttons before it
+  const customButton = container.querySelector('[data-prompt="custom"]');
+
+  // Update existing default buttons
+  const defaultButtons = container.querySelectorAll('.btn-ai:not([data-prompt="custom"]):not(.custom-prompt-button)');
+  defaultButtons.forEach((button, index) => {
+    if (window.geminiRewritePrompts[target] && window.geminiRewritePrompts[target][index]) {
+      const prompt = window.geminiRewritePrompts[target][index];
+      button.textContent = `${prompt.icon || '🎯'} ${prompt.name}`;
+      button.setAttribute('data-prompt', prompt.name.toLowerCase());
     }
   });
 
-  // Update caption buttons
-  const captionButtons = document.querySelectorAll('#captionRewriteButtons .btn-ai:not([data-prompt="custom"])');
-  captionButtons.forEach((button, index) => {
-    if (window.geminiRewritePrompts.caption[index]) {
-      const prompt = window.geminiRewritePrompts.caption[index];
-      button.textContent = `${prompt.icon} ${prompt.name}`;
+  // Add custom prompt buttons
+  if (window.geminiRewritePrompts[target]) {
+    const customPrompts = window.geminiRewritePrompts[target].filter(p => p.custom);
+
+    customPrompts.forEach(prompt => {
+      // Create button group for custom prompts (with delete button)
+      const buttonGroup = document.createElement('div');
+      buttonGroup.className = 'prompt-button-group custom-prompt-button';
+
+      // Create main button
+      const button = document.createElement('button');
+      button.className = 'btn btn-small btn-ai';
+      button.setAttribute('data-target', target);
+      button.setAttribute('data-prompt', prompt.name.toLowerCase());
+      button.textContent = `${prompt.icon || '🎯'} ${prompt.name}`;
+      button.addEventListener('click', handleRewriteClick);
+
+      // Create delete button
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'btn btn-small delete-custom-prompt-btn';
+      deleteButton.setAttribute('data-target', target);
+      deleteButton.setAttribute('data-prompt', prompt.name.toLowerCase());
+      deleteButton.textContent = '🗑️';
+      deleteButton.title = 'Delete custom prompt';
+      deleteButton.addEventListener('click', deleteCustomPrompt);
+
+      buttonGroup.appendChild(button);
+      buttonGroup.appendChild(deleteButton);
+
+      // Insert before the "Custom" button
+      if (customButton) {
+        container.insertBefore(buttonGroup, customButton);
+      } else {
+        container.appendChild(buttonGroup);
+      }
+    });
+  }
+}
+
+function deleteCustomPrompt(event) {
+  event.stopPropagation();
+
+  const target = event.target.getAttribute('data-target');
+  const promptName = event.target.getAttribute('data-prompt');
+
+  if (confirm(`Are you sure you want to delete the custom prompt "${promptName}"?`)) {
+    // Find and remove the custom prompt
+    if (window.geminiRewritePrompts[target]) {
+      window.geminiRewritePrompts[target] = window.geminiRewritePrompts[target].filter(p =>
+        !(p.custom && p.name.toLowerCase() === promptName.toLowerCase())
+      );
+
+      // Save to storage
+      const customPrompts = {
+        title: window.geminiRewritePrompts.title.filter(p => p.custom || p.modified),
+        caption: window.geminiRewritePrompts.caption.filter(p => p.custom || p.modified)
+      };
+
+      window.saveCustomPrompts(customPrompts);
+
+      // Update the UI
+      updatePromptButtons();
+
+      showMessage(`✅ Custom prompt "${promptName}" deleted successfully!`, 'success');
     }
-  });
+  }
 }
 
 async function applyCustomPrompt() {
@@ -3239,6 +3460,117 @@ async function applyCustomPrompt() {
     // Reset button state
     button.textContent = originalText;
     button.disabled = false;
+  }
+}
+
+async function saveCustomPromptOnly() {
+  const promptText = document.getElementById('customPromptText').value.trim();
+  const promptName = document.getElementById('customPromptName').value.trim();
+  const target = document.getElementById('customPromptTarget').value;
+
+  if (!promptText) {
+    showMessage('❌ Please enter a custom prompt', 'error');
+    return;
+  }
+
+  if (!promptName) {
+    showMessage('❌ Please enter a prompt name to save', 'error');
+    return;
+  }
+
+  try {
+    // Create the custom prompt object
+    const customPrompt = {
+      name: promptName,
+      icon: '🎯',
+      prompt: promptText,
+      custom: true,
+      requiresImage: target === 'caption' // Captions can use images, titles typically don't
+    };
+
+    // Add to the appropriate array
+    if (!window.geminiRewritePrompts[target]) {
+      window.geminiRewritePrompts[target] = [];
+    }
+    window.geminiRewritePrompts[target].push(customPrompt);
+
+    // Save to storage
+    const customPrompts = {
+      title: window.geminiRewritePrompts.title.filter(p => p.custom || p.modified),
+      caption: window.geminiRewritePrompts.caption.filter(p => p.custom || p.modified)
+    };
+
+    console.log('💾 Saving custom prompts:', customPrompts);
+    window.saveCustomPrompts(customPrompts);
+
+    showMessage(`✅ Custom prompt "${promptName}" saved successfully!`, 'success');
+
+    // Update the prompt buttons to show the new custom prompt
+    updatePromptButtons();
+
+    // Close the dialog after successful save
+    hideCustomPromptDialog();
+
+  } catch (error) {
+    console.error('Error saving custom prompt:', error);
+    showMessage('❌ Failed to save custom prompt', 'error');
+  }
+}
+
+async function saveAndApplyCustomPrompt() {
+  const promptText = document.getElementById('customPromptText').value.trim();
+  const promptName = document.getElementById('customPromptName').value.trim();
+  const target = document.getElementById('customPromptTarget').value;
+
+  if (!promptText) {
+    showMessage('❌ Please enter a custom prompt', 'error');
+    return;
+  }
+
+  if (!promptName) {
+    showMessage('❌ Please enter a prompt name to save', 'error');
+    return;
+  }
+
+  try {
+    // Create the custom prompt object
+    const customPrompt = {
+      name: promptName,
+      icon: '🎯',
+      prompt: promptText,
+      custom: true,
+      requiresImage: target === 'caption' // Captions can use images, titles typically don't
+    };
+
+    // Add to the appropriate array
+    if (!window.geminiRewritePrompts[target]) {
+      window.geminiRewritePrompts[target] = [];
+    }
+    window.geminiRewritePrompts[target].push(customPrompt);
+
+    // Save to storage
+    const customPrompts = {
+      title: window.geminiRewritePrompts.title.filter(p => p.custom || p.modified),
+      caption: window.geminiRewritePrompts.caption.filter(p => p.custom || p.modified)
+    };
+
+    console.log('💾 Saving custom prompts:', customPrompts);
+    window.saveCustomPrompts(customPrompts);
+
+    showMessage(`✅ Custom prompt "${promptName}" saved successfully!`, 'success');
+
+    // Update the prompt buttons to show the new custom prompt
+    updatePromptButtons();
+
+    // Now apply the prompt
+    await applyCustomPrompt();
+
+    // Close the dialog after successful save and apply
+    hideCustomPromptDialog();
+
+  } catch (error) {
+    console.error('Error saving custom prompt:', error);
+    showMessage('❌ Failed to save custom prompt', 'error');
   }
 }
 
@@ -4224,7 +4556,13 @@ function getPromptData(target, promptType) {
   const prompts = window.geminiRewritePrompts;
   if (!prompts || !prompts[target]) return null;
 
-  return prompts[target].find(p => p.name.toLowerCase().replace(/\s+/g, ' ') === promptType.replace(/\s+/g, ' '));
+  // Normalize both the search term and prompt names for comparison
+  const normalizedSearchTerm = promptType.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  return prompts[target].find(p => {
+    const normalizedPromptName = p.name.toLowerCase().replace(/\s+/g, ' ').trim();
+    return normalizedPromptName === normalizedSearchTerm;
+  });
 }
 
 function stopQueueRewrite() {

@@ -53,6 +53,15 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       display: flex;
       flex-direction: column;
+      max-height: calc(100vh - 120px); /* Ensure it doesn't exceed viewport */
+      overflow: hidden; /* Prevent the panel itself from scrolling */
+    }
+
+    /* Ensure scheduler panel content can scroll independently */
+    .scheduler-panel .panel-content {
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: calc(100vh - 200px); /* Account for header */
     }
     
     .panel-header {
@@ -69,6 +78,37 @@
       flex: 1;
       padding: 15px;
       overflow-y: auto;
+      min-height: 0; /* Important for flex containers to enable scrolling */
+    }
+
+    /* Ensure posts grid can scroll properly */
+    .posts-grid {
+      max-height: calc(100vh - 300px); /* Adjust based on header and toolbar height */
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* Custom scrollbar styling */
+    .panel-content::-webkit-scrollbar,
+    .posts-grid::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .panel-content::-webkit-scrollbar-track,
+    .posts-grid::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    .panel-content::-webkit-scrollbar-thumb,
+    .posts-grid::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+
+    .panel-content::-webkit-scrollbar-thumb:hover,
+    .posts-grid::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
     }
     
     .toolbar {
@@ -820,6 +860,7 @@
           <button class="btn btn-secondary" id="clearSelectionBtn">❌ Clear Selection</button>
           <button class="btn btn-warning" id="createAlbumBtn">📁 Create Album</button>
           <button class="btn btn-info" id="csvImportBtn">📄 Import CSV</button>
+          <button class="btn btn-success" id="csvExportBtn">📤 Export CSV</button>
           <button class="btn btn-primary" id="editImageBtn" disabled>🎨 Edit Image</button>
           <button class="btn btn-info" id="aiImageEditorBtn">🤖 AI Image+</button>
 
@@ -1342,6 +1383,10 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
+          <label class="form-label">Prompt Name (optional)</label>
+          <input type="text" class="form-input" id="customPromptName" placeholder="Enter a name to save this prompt for reuse...">
+        </div>
+        <div class="form-group">
           <label class="form-label">Rewrite Instructions</label>
           <textarea class="form-textarea" id="customPromptText" rows="4" placeholder="Enter your custom rewrite instructions here...
 Example: Make this text more professional and add relevant hashtags
@@ -1358,6 +1403,7 @@ Example: Make this text more professional and add relevant hashtags
       </div>
       <div class="modal-footer">
         <button class="btn btn-success" id="applyCustomPromptBtn">✨ Apply Rewrite</button>
+        <button class="btn btn-primary" id="saveCustomPromptBtn" style="display: none;">💾 Save</button>
         <button class="btn btn-secondary" id="cancelCustomPromptBtn">❌ Cancel</button>
       </div>
     </div>

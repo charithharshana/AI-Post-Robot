@@ -820,6 +820,9 @@ Rewritten text:`,
 // Create global instance
 window.geminiAPI = new GeminiAPI();
 
+// Store original default prompts for reference
+window.originalGeminiRewritePrompts = null;
+
 // Default rewrite prompts with multimodal support
 window.geminiRewritePrompts = {
   title: [
@@ -876,19 +879,83 @@ window.geminiRewritePrompts = {
   ]
 };
 
+// Initialize original prompts backup
+window.initializeOriginalPrompts = function() {
+  if (!window.originalGeminiRewritePrompts) {
+    window.originalGeminiRewritePrompts = JSON.parse(JSON.stringify(window.geminiRewritePrompts));
+    console.log('✅ Original prompts backed up');
+  }
+};
+
+// Reset prompts to original state
+window.resetToOriginalPrompts = function() {
+  if (window.originalGeminiRewritePrompts) {
+    window.geminiRewritePrompts = JSON.parse(JSON.stringify(window.originalGeminiRewritePrompts));
+    console.log('🔄 Prompts reset to original state');
+  }
+};
+
 // Load custom prompts from storage
 window.loadCustomPrompts = async function() {
   return new Promise((resolve) => {
+    // Initialize original prompts backup if not done
+    window.initializeOriginalPrompts();
+
+    // Reset to original state first
+    window.resetToOriginalPrompts();
+
     chrome.storage.local.get(['customGeminiPrompts'], (result) => {
       if (result.customGeminiPrompts) {
-        // Merge custom prompts with defaults
         const customPrompts = result.customGeminiPrompts;
+        console.log('📥 Loading custom prompts from storage:', customPrompts);
+
+        // Process title prompts
         if (customPrompts.title) {
-          window.geminiRewritePrompts.title = [...window.geminiRewritePrompts.title, ...customPrompts.title];
+          customPrompts.title.forEach(savedPrompt => {
+            if (savedPrompt.custom) {
+              // Add custom prompts
+              window.geminiRewritePrompts.title.push(savedPrompt);
+            } else if (savedPrompt.modified) {
+              // Replace modified default prompts using originalName for matching
+              const searchName = savedPrompt.originalName || savedPrompt.name;
+              const defaultIndex = window.geminiRewritePrompts.title.findIndex(p =>
+                p.name.toLowerCase().replace(/\s+/g, ' ').trim() ===
+                searchName.toLowerCase().replace(/\s+/g, ' ').trim() && !p.custom
+              );
+              if (defaultIndex !== -1) {
+                window.geminiRewritePrompts.title[defaultIndex] = savedPrompt;
+                console.log(`✅ Replaced default prompt "${searchName}" with modified version "${savedPrompt.name}"`);
+              } else {
+                console.warn(`⚠️ Could not find default prompt to replace: "${searchName}"`);
+              }
+            }
+          });
         }
+
+        // Process caption prompts
         if (customPrompts.caption) {
-          window.geminiRewritePrompts.caption = [...window.geminiRewritePrompts.caption, ...customPrompts.caption];
+          customPrompts.caption.forEach(savedPrompt => {
+            if (savedPrompt.custom) {
+              // Add custom prompts
+              window.geminiRewritePrompts.caption.push(savedPrompt);
+            } else if (savedPrompt.modified) {
+              // Replace modified default prompts using originalName for matching
+              const searchName = savedPrompt.originalName || savedPrompt.name;
+              const defaultIndex = window.geminiRewritePrompts.caption.findIndex(p =>
+                p.name.toLowerCase().replace(/\s+/g, ' ').trim() ===
+                searchName.toLowerCase().replace(/\s+/g, ' ').trim() && !p.custom
+              );
+              if (defaultIndex !== -1) {
+                window.geminiRewritePrompts.caption[defaultIndex] = savedPrompt;
+                console.log(`✅ Replaced default prompt "${searchName}" with modified version "${savedPrompt.name}"`);
+              } else {
+                console.warn(`⚠️ Could not find default prompt to replace: "${searchName}"`);
+              }
+            }
+          });
         }
+
+        console.log('✅ Custom and modified prompts loaded successfully');
       }
       resolve();
     });
@@ -897,7 +964,14 @@ window.loadCustomPrompts = async function() {
 
 // Save custom prompts to storage
 window.saveCustomPrompts = function(prompts) {
-  chrome.storage.local.set({ customGeminiPrompts: prompts });
+  console.log('💾 Saving to chrome storage:', prompts);
+  chrome.storage.local.set({ customGeminiPrompts: prompts }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('❌ Failed to save custom prompts:', chrome.runtime.lastError);
+    } else {
+      console.log('✅ Custom prompts saved to storage successfully');
+    }
+  });
 };
 
 // Update a specific prompt
