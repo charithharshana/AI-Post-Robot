@@ -2,6 +2,15 @@ document.addEventListener('DOMContentLoaded', function() {
   updateCounts();
   updateUrlList();
   setupEventListeners();
+
+  // Listen for storage changes to update popup dynamically
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && (changes.savedItems || changes.counters)) {
+      console.log('📊 Storage changed, refreshing popup...');
+      updateCounts();
+      updateUrlList();
+    }
+  });
 });
 
 function setupEventListeners() {
@@ -95,6 +104,56 @@ function updateCounts() {
     const categoryList = document.getElementById('categoryList');
     categoryList.innerHTML = '';
 
+    // Show recent posts first (last 5 posts across all categories)
+    const allPosts = [];
+    Object.keys(savedItems).forEach(category => {
+      savedItems[category].forEach(post => {
+        allPosts.push({ ...post, category });
+      });
+    });
+
+    // Sort by timestamp (newest first) and take last 5
+    const recentPosts = allPosts
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+      .slice(0, 5);
+
+    if (recentPosts.length > 0) {
+      const recentDiv = document.createElement('div');
+      recentDiv.style.cssText = `
+        margin: 8px 0;
+        padding: 12px;
+        background: #e6fffa;
+        border-radius: 8px;
+        border-left: 4px solid #38b2ac;
+      `;
+
+      let recentHtml = '<div style="font-weight: 600; color: #2d3748; margin-bottom: 8px;">🕒 Recent Posts</div>';
+
+      recentPosts.forEach(post => {
+        const timeAgo = getTimeAgo(post.timestamp);
+        const caption = (post.caption || post.title || 'No caption').substring(0, 40);
+        const source = post.source === 'ctrl_click' ? '🖱️ Ctrl+Click' :
+                      post.source === 'pc_upload' ? '💻 PC Upload' :
+                      post.source === 'ai_generated' ? '🤖 AI Generated' :
+                      '📋 Context Menu';
+
+        recentHtml += `
+          <div style="margin: 4px 0; padding: 6px; background: white; border-radius: 4px; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 500; color: #667eea;">${post.category}</span>
+              <span style="color: #718096;">${timeAgo}</span>
+            </div>
+            <div style="color: #4a5568; margin-top: 2px;">${caption}${caption.length >= 40 ? '...' : ''}</div>
+            <div style="color: #a0aec0; font-size: 10px; margin-top: 2px;">${source}</div>
+          </div>
+        `;
+      });
+
+      recentDiv.innerHTML = recentHtml;
+      categoryList.appendChild(recentDiv);
+    }
+
+    // Show category summaries
     categories.forEach(category => {
       const count = savedItems[category] ? savedItems[category].length : 0;
       totalCount += count;
@@ -146,6 +205,21 @@ function updateCounts() {
   });
 }
 
+function getTimeAgo(timestamp) {
+  if (!timestamp) return 'Unknown';
+
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
 function exportAll(category) {
   // Only allow category-specific exports, not all exports
   if (!category) {
@@ -169,9 +243,25 @@ function exportAll(category) {
       const cleanedCaption = item.caption
         ? item.caption.replace(/[\n\r]+/g, ' ').replace(/,/g, ' ')
         : "";
-      const imageUrl = item.imageUrl || '[TEXT POST]';
+
+      // Get the proper download URL (same logic as download function)
+      let exportUrl = '[TEXT POST]';
+      if (!item.isTextOnly) {
+        if (item.storageId) {
+          exportUrl = `https://api.robopost.app/stored_objects/${item.storageId}/download`;
+        } else if (item.originalDataUrl) {
+          exportUrl = item.originalDataUrl;
+        } else if (item.originalUrl) {
+          exportUrl = item.originalUrl;
+        } else if (item.videoUrl) {
+          exportUrl = item.videoUrl;
+        } else if (item.imageUrl) {
+          exportUrl = item.imageUrl;
+        }
+      }
+
       const postType = item.isTextOnly ? 'TEXT' : 'MEDIA';
-      csvContent += `${imageUrl},${cleanedCaption},${postType}\n`;
+      csvContent += `${exportUrl},${cleanedCaption},${postType}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);

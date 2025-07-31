@@ -424,10 +424,25 @@ function exportAllData() {
     
     Object.keys(savedItems).forEach(category => {
       savedItems[category].forEach(item => {
-        const cleanedCaption = item.caption 
+        const cleanedCaption = item.caption
           ? item.caption.replace(/[\n\r]+/g, ' ').replace(/,/g, ' ')
           : "";
-        csvContent += `${category},"${item.imageUrl}","${cleanedCaption}","${new Date().toISOString()}"\n`;
+
+        // Get the proper download URL (same logic as download function)
+        let exportUrl = '';
+        if (item.storageId) {
+          exportUrl = `https://api.robopost.app/stored_objects/${item.storageId}/download`;
+        } else if (item.originalDataUrl) {
+          exportUrl = item.originalDataUrl;
+        } else if (item.originalUrl) {
+          exportUrl = item.originalUrl;
+        } else if (item.videoUrl) {
+          exportUrl = item.videoUrl;
+        } else if (item.imageUrl) {
+          exportUrl = item.imageUrl;
+        }
+
+        csvContent += `${category},"${exportUrl}","${cleanedCaption}","${new Date().toISOString()}"\n`;
       });
     });
     

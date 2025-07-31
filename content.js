@@ -170,6 +170,9 @@ document.addEventListener('click', (e) => {
     const imageUrl = e.target.src;
     if (!imageUrl) return;
 
+    // Try to get the original URL
+    const originalUrl = getOriginalImageUrl(e.target, imageUrl);
+
     // Get the nearest caption for this image
     const nearestCaption = getNearestCaption(e.target);
     const processedCaption = processCaption(nearestCaption);
@@ -178,6 +181,7 @@ document.addEventListener('click', (e) => {
     chrome.runtime.sendMessage({
       action: "ctrlClickSave",
       imageUrl: imageUrl,
+      originalUrl: originalUrl,
       caption: processedCaption
     });
 
@@ -185,6 +189,56 @@ document.addEventListener('click', (e) => {
     showCtrlClickFeedback(e.target);
   }
 });
+
+function getOriginalImageUrl(imgElement, currentUrl) {
+  // Try to find original URL from various sources
+
+  // 1. Check data attributes that might contain original URLs
+  const dataOriginal = imgElement.getAttribute('data-original') ||
+                      imgElement.getAttribute('data-src') ||
+                      imgElement.getAttribute('data-full-src');
+  if (dataOriginal && dataOriginal !== currentUrl) {
+    return dataOriginal;
+  }
+
+  // 2. Check parent links that might point to original image
+  const parentLink = imgElement.closest('a[href]');
+  if (parentLink) {
+    const href = parentLink.href;
+    // Check if the link points to an image
+    if (href.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) {
+      return href;
+    }
+  }
+
+  // 3. Try to convert known thumbnail patterns to original URLs
+  if (currentUrl.includes('fbcdn.net')) {
+    // Facebook: Remove size parameters and get original
+    const originalFbUrl = currentUrl.split('&')[0].replace(/\/s\d+x\d+\//, '/');
+    if (originalFbUrl !== currentUrl) {
+      return originalFbUrl;
+    }
+  }
+
+  if (currentUrl.includes('pinimg.com')) {
+    // Pinterest: Convert thumbnail URLs to original
+    const originalPinUrl = currentUrl.replace(/\/\d+x\//, '/originals/');
+    if (originalPinUrl !== currentUrl) {
+      return originalPinUrl;
+    }
+  }
+
+  if (currentUrl.includes('cdninstagram.com') || currentUrl.includes('instagram.com')) {
+    // Instagram: Remove size parameters
+    const originalInstaUrl = currentUrl.split('?')[0];
+    if (originalInstaUrl !== currentUrl) {
+      return originalInstaUrl;
+    }
+  }
+
+  // 4. Return current URL if no original found
+  return currentUrl;
+}
 
 // Add image hover detection for preview
 document.addEventListener('mouseover', (e) => {

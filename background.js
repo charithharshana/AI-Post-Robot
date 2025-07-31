@@ -35,21 +35,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case "ctrlClickSave":
       // Handle Ctrl+click save with last used category
       const imageUrl = request.imageUrl;
+      const originalUrl = request.originalUrl;
       const caption = request.caption || selectedText.replace(/[\n\r]+/g, ' ').trim();
 
-      chrome.storage.local.get(["savedItems", "counters", "lastUsedCategory"], (result) => {
+      chrome.storage.local.get(["savedItems", "counters", "lastUsedCategory", "categories"], (result) => {
         const savedItems = result.savedItems || {};
         const counters = result.counters || { captionCount: 0, linkCount: 0 };
-        const category = result.lastUsedCategory || categories[0] || 'General';
+        const storedCategories = result.categories || categories;
+        const category = result.lastUsedCategory || storedCategories[0] || 'Facebook';
 
         if (!savedItems[category]) savedItems[category] = [];
-        savedItems[category].push({ imageUrl, caption });
+
+        // Make sure category exists in categories array
+        if (!storedCategories.includes(category)) {
+          storedCategories.push(category);
+        }
+
+        // Create post object with original URL
+        const postData = {
+          id: `ctrl_${Date.now()}`,
+          title: caption.substring(0, 50) + (caption.length > 50 ? '...' : ''),
+          caption: caption,
+          imageUrl: imageUrl,
+          originalUrl: originalUrl && originalUrl !== imageUrl ? originalUrl : null,
+          category: category,
+          timestamp: Date.now(),
+          source: 'ctrl_click'
+        };
+
+        savedItems[category].push(postData);
 
         // Update counters
         if (caption.trim()) counters.captionCount++;
         if (imageUrl) counters.linkCount++;
 
-        chrome.storage.local.set({ savedItems, counters }, () => {
+        chrome.storage.local.set({ savedItems, counters, categories: storedCategories, lastUsedCategory: category }, () => {
           updateBadgeText(savedItems);
           const totalCount = getTotalCount(savedItems);
           chrome.tabs.sendMessage(sender.tab.id, {
@@ -81,6 +101,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // Test network connectivity from background script
       testNetworkFromBackground(request, sendResponse);
       return true; // Keep message channel open for async response
+    case "fetchMedia":
+      // Handle media fetching for download functionality
+      fetchMediaForDownload(request.url, sendResponse);
+      return true; // Keep message channel open for async response
+    case "refreshContextMenu":
+      // Force refresh context menu
+      console.log('🔄 Manual context menu refresh requested');
+      createContextMenu();
+      sendResponse({ success: true });
+      break;
   }
 });
 
@@ -434,12 +464,65 @@ async function handleMediaUpload(request, sendResponse) {
   }
 }
 
+// Function to fetch media for download functionality
+async function fetchMediaForDownload(mediaUrl, sendResponse) {
+  try {
+    console.log('Background: Fetching media for download from:', mediaUrl);
+
+    // Prepare headers based on the URL type
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    };
+
+    // Add platform-specific headers
+    const isPinterestUrl = mediaUrl.includes('pinimg.com') || mediaUrl.includes('pinterest.com');
+    const isFacebookUrl = mediaUrl.includes('facebook.com') || mediaUrl.includes('fbcdn.net');
+
+    if (isPinterestUrl) {
+      headers['Referer'] = 'https://www.pinterest.com/';
+    } else if (isFacebookUrl) {
+      headers['Referer'] = 'https://www.facebook.com/';
+    }
+
+    const response = await fetch(mediaUrl, {
+      method: 'GET',
+      headers: headers
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+    // Convert to base64 for transmission
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+    console.log('Background: Successfully fetched media, size:', arrayBuffer.byteLength, 'bytes');
+
+    sendResponse({
+      success: true,
+      data: base64,
+      contentType: contentType
+    });
+
+  } catch (error) {
+    console.error('Background: Media fetch failed:', error);
+    sendResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
 // Remove duplicate message listener (already handled above)
 
 chrome.runtime.onInstalled.addListener(() => {
-  createContextMenu();
+  console.log('🔧 Extension installed/updated, initializing...');
+  console.log('🔧 Default categories:', categories);
 
-  // Initialize storage with enhanced default settings
+  // Initialize storage with enhanced default settings first
   chrome.storage.local.set({
     savedItems: {},
     categories: categories,
@@ -459,12 +542,24 @@ chrome.runtime.onInstalled.addListener(() => {
     robopostApiKey: '',
     enableCtrlClick: true,
     lastUsedCategory: categories[0] || 'General'
+  }, () => {
+    console.log('✅ Storage initialized, creating context menu...');
+    // Small delay to ensure everything is ready
+    setTimeout(() => {
+      createContextMenu();
+    }, 100);
   });
 
   // Set initial badge with black background and white text
   chrome.action.setBadgeText({ text: "0" });
   chrome.action.setBadgeBackgroundColor({ color: "#000000" }); // Black background
   chrome.action.setBadgeTextColor({ color: "#FFFFFF" }); // White text
+});
+
+// Also create context menu on startup (not just install)
+chrome.runtime.onStartup.addListener(() => {
+  console.log('🚀 Extension startup, creating context menu...');
+  createContextMenu();
 });
 
 function addUrl(newUrl) {
@@ -518,51 +613,76 @@ function updateContextMenuPatterns(urls) {
 }
 
 function createContextMenu() {
-  // Image context menu
-  chrome.contextMenus.create({
-    id: "saveSocialImage",
-    title: "Save image link and caption",
-    contexts: ["image"],
-    documentUrlPatterns: [
-      "*://*.facebook.com/*",
-      "*://*.pinterest.com/*"
-    ]
-  });
+  console.log('📋 createContextMenu() called');
 
-  // Text selection context menu
-  chrome.contextMenus.create({
-    id: "saveTextPost",
-    title: "Save as text post",
-    contexts: ["selection"],
-    documentUrlPatterns: [
-      "*://*.facebook.com/*",
-      "*://*.pinterest.com/*"
-    ]
-  });
+  // Remove all existing context menus first
+  chrome.contextMenus.removeAll(() => {
+    console.log('🗑️ Removed all existing context menus');
 
-  categories.forEach(category => {
-    // Image submenu items
-    chrome.contextMenus.create({
-      id: `save_${category}`,
-      parentId: "saveSocialImage",
-      title: category,
-      contexts: ["image"],
-      documentUrlPatterns: [
-        "*://*.facebook.com/*",
-        "*://*.pinterest.com/*"
-      ]
-    });
+    // Load categories from storage first, then create context menu
+    chrome.storage.local.get(['categories'], (result) => {
+      const storedCategories = result.categories || categories;
+      console.log('📋 Creating context menu with categories:', storedCategories);
+      console.log('📋 Default categories fallback:', categories);
 
-    // Text post submenu items
-    chrome.contextMenus.create({
-      id: `text_${category}`,
-      parentId: "saveTextPost",
-      title: category,
-      contexts: ["selection"],
-      documentUrlPatterns: [
-        "*://*.facebook.com/*",
-        "*://*.pinterest.com/*"
-      ]
+      // Image context menu
+      chrome.contextMenus.create({
+        id: "saveSocialImage",
+        title: "Save image link and caption",
+        contexts: ["image"],
+        documentUrlPatterns: [
+          "*://*.facebook.com/*",
+          "*://*.pinterest.com/*"
+        ]
+      }, () => {
+        console.log('✅ Created main image context menu');
+      });
+
+      // Text selection context menu
+      chrome.contextMenus.create({
+        id: "saveTextPost",
+        title: "Save as text post",
+        contexts: ["selection"],
+        documentUrlPatterns: [
+          "*://*.facebook.com/*",
+          "*://*.pinterest.com/*"
+        ]
+      }, () => {
+        console.log('✅ Created main text context menu');
+      });
+
+      // Add category submenus
+      storedCategories.forEach((category, index) => {
+        console.log(`📋 Adding context menu for category ${index + 1}/${storedCategories.length}: ${category}`);
+
+        // Image submenu items
+        chrome.contextMenus.create({
+          id: `save_${category}`,
+          parentId: "saveSocialImage",
+          title: category,
+          contexts: ["image"],
+          documentUrlPatterns: [
+            "*://*.facebook.com/*",
+            "*://*.pinterest.com/*"
+          ]
+        }, () => {
+          console.log(`✅ Created image submenu for: ${category}`);
+        });
+
+        // Text post submenu items
+        chrome.contextMenus.create({
+          id: `text_${category}`,
+          parentId: "saveTextPost",
+          title: category,
+          contexts: ["selection"],
+          documentUrlPatterns: [
+            "*://*.facebook.com/*",
+            "*://*.pinterest.com/*"
+          ]
+        }, () => {
+          console.log(`✅ Created text submenu for: ${category}`);
+        });
+      });
     });
   });
 }
@@ -607,12 +727,30 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     // Clean the caption when saving
     const caption = selectedText.replace(/[\n\r]+/g, ' ').trim();
 
-    chrome.storage.local.get(["savedItems", "counters"], (result) => {
+    chrome.storage.local.get(["savedItems", "counters", "categories"], (result) => {
       const savedItems = result.savedItems || {};
       const counters = result.counters || { captionCount: 0, linkCount: 0 };
+      const storedCategories = result.categories || categories;
 
       if (!savedItems[category]) savedItems[category] = [];
-      savedItems[category].push({ imageUrl, caption });
+
+      // Make sure category exists in categories array
+      if (!storedCategories.includes(category)) {
+        storedCategories.push(category);
+      }
+
+      // Create post object (for regular context menu saves, we don't have original URL detection)
+      const postData = {
+        id: `menu_${Date.now()}`,
+        title: caption.substring(0, 50) + (caption.length > 50 ? '...' : ''),
+        caption: caption,
+        imageUrl: imageUrl,
+        category: category,
+        timestamp: Date.now(),
+        source: 'context_menu'
+      };
+
+      savedItems[category].push(postData);
 
       // Update counters
       if (caption.trim()) counters.captionCount++;
@@ -622,6 +760,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       chrome.storage.local.set({
         savedItems,
         counters,
+        categories: storedCategories,
         lastUsedCategory: category
       }, () => {
         updateBadgeText(savedItems);

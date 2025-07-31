@@ -114,11 +114,19 @@ async function loadSavedData() {
     chrome.storage.local.get(['savedItems', 'categories'], (result) => {
       savedItems = result.savedItems || {};
       categories = result.categories || [];
-      
+
+      // Initialize default categories if none exist
+      if (categories.length === 0) {
+        categories = ['Facebook', 'Pinterest'];
+        chrome.storage.local.set({ categories }, () => {
+          console.log('✅ Initialized default categories:', categories);
+        });
+      }
+
       loadCategoryTabs();
       loadPosts();
       updateStats();
-      
+
       resolve();
     });
   });
@@ -936,22 +944,26 @@ function updateTimezoneInfo() {
 }
 
 function updateIntervalDisplay() {
-  const interval = document.getElementById('postInterval').value;
-  const intervalType = document.getElementById('intervalType').value;
-  const display = document.getElementById('intervalDisplay');
+  const interval = document.getElementById('postInterval').value || 30;
+  const intervalType = document.getElementById('intervalType').value || 'fixed';
   const options = document.getElementById('intervalOptions');
 
-  display.textContent = interval;
+  if (!options) return;
 
   switch (intervalType) {
     case 'fixed':
-      options.innerHTML = `Posts will be scheduled every <span id="intervalDisplay">${interval}</span> minutes`;
+      options.innerHTML = `Posts will be scheduled every <strong>${interval}</strong> minutes`;
       break;
     case 'random':
-      options.innerHTML = `Posts will be scheduled with random gaps between ${Math.floor(interval * 0.5)} and ${Math.floor(interval * 1.5)} minutes`;
+      const minInterval = Math.floor(interval * 0.5);
+      const maxInterval = Math.floor(interval * 1.5);
+      options.innerHTML = `Posts will be scheduled with random gaps between <strong>${minInterval}</strong> and <strong>${maxInterval}</strong> minutes`;
       break;
     case 'optimal':
-      options.innerHTML = `Posts will be scheduled at optimal engagement times (approximately every ${interval} minutes)`;
+      options.innerHTML = `Posts will be scheduled at optimal engagement times (approximately every <strong>${interval}</strong> minutes)`;
+      break;
+    default:
+      options.innerHTML = `Posts will be scheduled every <strong>${interval}</strong> minutes`;
       break;
   }
 }
@@ -961,26 +973,67 @@ function setQuickSchedule(preset) {
   const now = new Date();
   let scheduleTime;
 
-  switch (preset) {
-    case 'now':
-      scheduleTime = new Date(now.getTime() + (5 * 60000)); // 5 minutes from now
-      break;
-    case '1hour':
-      scheduleTime = new Date(now.getTime() + (60 * 60000)); // 1 hour from now
-      break;
-    case 'tomorrow':
-      scheduleTime = new Date(now);
-      scheduleTime.setDate(scheduleTime.getDate() + 1);
-      scheduleTime.setHours(9, 0, 0, 0); // 9 AM tomorrow
-      break;
-    case 'weekend':
-      scheduleTime = new Date(now);
-      const daysUntilSaturday = (6 - scheduleTime.getDay()) % 7;
-      scheduleTime.setDate(scheduleTime.getDate() + (daysUntilSaturday || 7));
-      scheduleTime.setHours(10, 0, 0, 0); // 10 AM Saturday
-      break;
-    default:
-      return;
+  // Check if it's a modified default preset
+  const presetConfig = modifiedDefaultPresets[preset] || defaultPresets[preset];
+
+  if (presetConfig) {
+    scheduleTime = new Date(now);
+
+    if (presetConfig.type === 'relative') {
+      // Add relative time
+      const minutes = (presetConfig.minutes || 0) + (presetConfig.hours || 0) * 60 + (presetConfig.days || 0) * 24 * 60;
+      scheduleTime = new Date(now.getTime() + (minutes * 60000));
+
+      // Handle special cases
+      if (preset === 'weekend' || presetConfig.days === 'weekend') {
+        scheduleTime = new Date(now);
+        const daysUntilSaturday = (6 - scheduleTime.getDay()) % 7;
+        scheduleTime.setDate(scheduleTime.getDate() + (daysUntilSaturday || 7));
+        scheduleTime.setHours(presetConfig.hours || 10, presetConfig.minutes || 0, 0, 0);
+      } else if (presetConfig.keepTime) {
+        // Keep current time but add days
+        scheduleTime.setHours(now.getHours(), now.getMinutes(), 0, 0);
+      }
+    } else if (presetConfig.type === 'absolute') {
+      // Set absolute time
+      const [hours, minutes] = (presetConfig.time || '09:00').split(':').map(Number);
+      scheduleTime.setHours(hours, minutes, 0, 0);
+
+      // Handle day of week if specified
+      if (presetConfig.dayOfWeek !== undefined) {
+        const targetDay = presetConfig.dayOfWeek;
+        const currentDay = scheduleTime.getDay();
+        const daysToAdd = (targetDay - currentDay + 7) % 7;
+        if (daysToAdd === 0 && scheduleTime <= now) {
+          scheduleTime.setDate(scheduleTime.getDate() + 7); // Next week
+        } else {
+          scheduleTime.setDate(scheduleTime.getDate() + daysToAdd);
+        }
+      }
+    }
+  } else {
+    // Fallback to old logic for unknown presets
+    switch (preset) {
+      case 'now':
+        scheduleTime = new Date(now.getTime() + (5 * 60000));
+        break;
+      case '1hour':
+        scheduleTime = new Date(now.getTime() + (60 * 60000));
+        break;
+      case 'tomorrow':
+        scheduleTime = new Date(now);
+        scheduleTime.setDate(scheduleTime.getDate() + 1);
+        scheduleTime.setHours(now.getHours(), now.getMinutes(), 0, 0);
+        break;
+      case 'weekend':
+        scheduleTime = new Date(now);
+        const daysUntilSaturday = (6 - scheduleTime.getDay()) % 7;
+        scheduleTime.setDate(scheduleTime.getDate() + (daysUntilSaturday || 7));
+        scheduleTime.setHours(10, 0, 0, 0);
+        break;
+      default:
+        return;
+    }
   }
 
   // Ensure the input field exists before setting value
@@ -1022,6 +1075,7 @@ function setupEventListeners() {
   document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
   document.getElementById('createAlbumBtn').addEventListener('click', createAlbum);
   document.getElementById('deletePostsBtn').addEventListener('click', deleteSelectedPosts);
+  document.getElementById('downloadPostsBtn').addEventListener('click', downloadSelectedPosts);
   document.getElementById('filterTextOnlyBtn').addEventListener('click', toggleTextOnlyFilter);
 
   // CSV Import buttons
@@ -1079,6 +1133,8 @@ function setupEventListeners() {
       }
     }
   });
+
+
 
   // Custom preset management
   document.getElementById('addCustomPresetBtn').addEventListener('click', showCustomPresetDialog);
@@ -1484,11 +1540,111 @@ function createAlbum() {
     alert('Please select at least 2 posts to create an album');
     return;
   }
-  
+
   // Enable album mode
   document.querySelector('input[value="album"]').checked = true;
   updateSelectedPostsInfo();
 }
+
+async function downloadSelectedPosts() {
+  if (selectedPosts.size === 0) {
+    showMessage('❌ No posts selected for download', 'error');
+    return;
+  }
+
+  const postsToDownload = Array.from(selectedPosts).map(postId => window.getPostById(postId));
+  const mediaPostsToDownload = postsToDownload.filter(post => post && (post.imageUrl || post.videoUrl));
+
+  if (mediaPostsToDownload.length === 0) {
+    showMessage('❌ No media posts selected for download', 'error');
+    return;
+  }
+
+  showMessage(`🔄 Starting download of ${mediaPostsToDownload.length} media file(s)...`, 'info');
+
+  let downloadedCount = 0;
+  let failedCount = 0;
+
+  for (let i = 0; i < mediaPostsToDownload.length; i++) {
+    const post = mediaPostsToDownload[i];
+
+    // Get the correct download URL based on post type
+    let downloadUrl = null;
+    let urlType = 'unknown';
+
+    // 1. For PC uploads - use RoboPost storage URL
+    if (post.storageId) {
+      downloadUrl = `https://api.robopost.app/stored_objects/${post.storageId}/download`;
+      urlType = 'RoboPost Storage (Original Quality)';
+    }
+    // 2. For AI images - use original data URL
+    else if (post.originalDataUrl) {
+      downloadUrl = post.originalDataUrl;
+      urlType = 'AI Generated (Original Quality)';
+    }
+    // 3. For social media posts - use original URL
+    else if (post.originalUrl) {
+      downloadUrl = post.originalUrl;
+      urlType = 'Social Media (Original Quality)';
+    }
+    // 4. For videos
+    else if (post.videoUrl) {
+      downloadUrl = post.videoUrl;
+      urlType = 'Video URL';
+    }
+    // 5. Fallback to image URL (likely thumbnail)
+    else if (post.imageUrl) {
+      downloadUrl = post.imageUrl;
+      urlType = 'Image URL (May be thumbnail)';
+    }
+
+    if (!downloadUrl) {
+      console.warn(`No download URL found for post ${post.id}`);
+      failedCount++;
+      continue;
+    }
+
+    try {
+      // Create a simple filename
+      const timestamp = new Date(post.timestamp || Date.now()).toISOString().split('T')[0];
+      const postTitle = (post.title || 'post').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
+      const isVideo = !!post.videoUrl;
+      const extension = isVideo ? 'mp4' : 'jpg';
+      const filename = `${timestamp}_${postTitle}.${extension}`;
+
+      console.log(`📥 Downloading post ${i + 1}/${mediaPostsToDownload.length}: ${filename}`);
+      console.log(`📥 Source: ${urlType}`);
+      console.log(`📥 URL: ${downloadUrl}`);
+
+      // Simple download - just create a link and click it
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      downloadedCount++;
+
+      // Small delay between downloads
+      if (i < mediaPostsToDownload.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (error) {
+      console.error(`Failed to download media for post ${post.id}:`, error);
+      failedCount++;
+    }
+  }
+
+  if (downloadedCount > 0) {
+    showMessage(`✅ Started download of ${downloadedCount} media file(s)${failedCount > 0 ? ` (${failedCount} failed)` : ''}`, 'success');
+  } else {
+    showMessage(`❌ Failed to download any media files`, 'error');
+  }
+}
+
+
 
 function addLink() {
   const linksEditor = document.getElementById('linksEditor');
@@ -1806,6 +1962,11 @@ async function generateVideoThumbnail(videoFile) {
   });
 }
 
+// Global variables for multiple file upload
+let isUploadingMultipleFiles = false;
+let uploadQueue = [];
+let currentUploadIndex = 0;
+
 async function uploadFromPC() {
   console.log('📁 Opening file picker for PC upload...');
 
@@ -1813,120 +1974,239 @@ async function uploadFromPC() {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'image/*,video/*';
-  fileInput.multiple = false;
+  fileInput.multiple = true; // Allow multiple files
 
   fileInput.onchange = async function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files);
+    if (!files || files.length === 0) return;
 
-    console.log('📁 Selected file:', file.name, file.size, 'bytes');
+    console.log(`📁 Selected ${files.length} file(s) for upload`);
 
-    // Set loading state
-    setButtonLoading('uploadPcBtn', true);
+    // Set up multiple file upload
+    isUploadingMultipleFiles = true;
+    uploadQueue = files;
+    currentUploadIndex = 0;
 
+    // Add beforeunload listener to warn about refresh during upload
+    const beforeUnloadHandler = (e) => {
+      if (isUploadingMultipleFiles) {
+        e.preventDefault();
+        e.returnValue = 'Files are still uploading. Are you sure you want to refresh?';
+        return 'Files are still uploading. Are you sure you want to refresh?';
+      }
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+
+    // Start uploading files one by one
     try {
-      // Validate file size (50MB limit like Python)
-      if (file.size > 50 * 1024 * 1024) {
-        throw new Error('File is too large (>50MB). Please use a smaller file.');
-      }
-
-      if (file.size === 0) {
-        throw new Error('File is empty (0 bytes)');
-      }
-
-      // Upload to RoboPost media
-      console.log('📤 Uploading file to RoboPost...');
-      const storageId = await window.roboPostAPI.uploadMedia(file);
-      console.log('✅ File uploaded, storage_id:', storageId);
-
-      // Extract filename without extension for title/caption
-      const fileName = file.name.replace(/\.[^/.]+$/, "");
-
-      // Generate preview and store original data
-      let previewUrl, originalDataUrl;
-      if (file.type.startsWith('video/')) {
-        // Generate video thumbnail for preview
-        previewUrl = await generateVideoThumbnail(file);
-        // Store original video data for AI processing
-        originalDataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      } else {
-        // For images, preview and original are the same
-        previewUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        originalDataUrl = previewUrl; // Same for images
-      }
-
-      // Get image dimensions if it's an image
-      let dimensions = null;
-      if (!file.type.startsWith('video/')) {
-        try {
-          dimensions = await getImageDimensions(originalDataUrl);
-        } catch (error) {
-          console.warn('Failed to get image dimensions:', error);
-        }
-      }
-
-      // Create post object - always save to "My PC" category
-      const pcCategory = 'My PC';
-      const postId = Date.now().toString();
-      const newPost = {
-        id: postId,
-        title: fileName,
-        caption: fileName,
-        imageUrl: previewUrl, // Use thumbnail for videos, data URL for images
-        originalDataUrl: originalDataUrl, // Store original video/image data for AI processing
-        storageId: storageId,
-        category: pcCategory,
-        timestamp: Date.now(),
-        source: 'pc_upload',
-        filename: file.name,
-        fileType: file.type, // Store original file type for scheduling
-        fileSize: file.size, // Store file size
-        dimensions: dimensions, // Store image dimensions
-        isVideo: file.type.startsWith('video/') // Helper flag for easy checking
-      };
-
-      // Ensure "My PC" category exists in categories list
-      if (!categories.includes(pcCategory)) {
-        categories.push(pcCategory);
-      }
-
-      // Add to saved items in "My PC" category
-      if (!savedItems[pcCategory]) {
-        savedItems[pcCategory] = [];
-      }
-      savedItems[pcCategory].push(newPost);
-
-      // Save to storage (include both savedItems and categories)
-      await new Promise(resolve => {
-        chrome.storage.local.set({ savedItems, categories }, resolve);
-      });
-
-      // Refresh the UI
-      await loadSavedData();
-
-      showMessage(`✅ File "${file.name}" uploaded successfully and added to library!`, 'success');
-
-    } catch (error) {
-      console.error('❌ PC upload failed:', error);
-      showError(`Failed to upload file: ${error.message}`);
+      await uploadFilesSequentially();
     } finally {
-      // Reset loading state
-      setButtonLoading('uploadPcBtn', false);
+      // Clean up
+      isUploadingMultipleFiles = false;
+      uploadQueue = [];
+      currentUploadIndex = 0;
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
     }
   };
 
   // Trigger file picker
   fileInput.click();
+}
+
+async function uploadFilesSequentially() {
+  const totalFiles = uploadQueue.length;
+
+  for (let i = 0; i < totalFiles; i++) {
+    currentUploadIndex = i;
+    const file = uploadQueue[i];
+
+    console.log(`📁 Processing file ${i + 1}/${totalFiles}: ${file.name}`);
+
+    // Update button text to show progress
+    const button = document.getElementById('uploadPcBtn');
+    if (button) {
+      button.textContent = `🔄 Uploading ${i + 1}/${totalFiles}...`;
+      button.disabled = true;
+    }
+
+    try {
+      await uploadSingleFile(file, i + 1, totalFiles);
+
+      // Force refresh the library after each successful upload
+      console.log(`✅ File ${i + 1}/${totalFiles} uploaded, refreshing library...`);
+
+      // Reload categories and posts
+      loadCategoryTabs();
+      loadPosts();
+      updateStats();
+
+      // Show individual file success message
+      showMessage(`✅ File ${i + 1}/${totalFiles} "${file.name}" uploaded and added to library!`, 'success');
+
+      // Small delay to ensure UI updates
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+    } catch (error) {
+      console.error(`❌ Failed to upload file ${i + 1}/${totalFiles}:`, error);
+      showError(`Failed to upload file "${file.name}": ${error.message}`);
+      // Continue with next file even if one fails
+    }
+  }
+
+  // Reset button state
+  const button = document.getElementById('uploadPcBtn');
+  if (button) {
+    button.textContent = '📁 Upload from PC';
+    button.disabled = false;
+  }
+
+  // Show final completion message
+  showMessage(`🎉 All done! Uploaded ${totalFiles} file(s) to library!`, 'success');
+}
+
+async function uploadSingleFile(file, fileNumber, totalFiles) {
+  console.log(`📁 Uploading file ${fileNumber}/${totalFiles}:`, file.name, file.size, 'bytes');
+
+  // Validate file size (50MB limit like Python)
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error('File is too large (>50MB). Please use a smaller file.');
+  }
+
+  if (file.size === 0) {
+    throw new Error('File is empty (0 bytes)');
+  }
+
+  // Upload to RoboPost media
+  console.log(`📤 Uploading file ${fileNumber}/${totalFiles} to RoboPost...`);
+  const storageId = await window.roboPostAPI.uploadMedia(file);
+  console.log(`✅ File ${fileNumber}/${totalFiles} uploaded, storage_id:`, storageId);
+
+  // Extract filename without extension for title/caption
+  const fileName = file.name.replace(/\.[^/.]+$/, "");
+
+  // Generate small preview for storage (compress images to avoid quota issues)
+  let previewUrl;
+  if (file.type.startsWith('video/')) {
+    // Generate video thumbnail for preview
+    previewUrl = await generateVideoThumbnail(file);
+  } else {
+    // For images, create a compressed preview to save storage space
+    previewUrl = await createCompressedPreview(file);
+  }
+
+  // Get image dimensions if it's an image
+  let dimensions = null;
+  if (!file.type.startsWith('video/')) {
+    try {
+      dimensions = await getImageDimensions(previewUrl);
+    } catch (error) {
+      console.warn('Failed to get image dimensions:', error);
+    }
+  }
+
+  // Create post object - always save to "My PC" category
+  const pcCategory = 'My PC';
+  const postId = Date.now().toString() + '_' + fileNumber; // Make unique for multiple files
+  const newPost = {
+    id: postId,
+    title: fileName,
+    caption: fileName,
+    imageUrl: previewUrl, // Compressed preview
+    storageId: storageId, // This is what we use for actual posting
+    category: pcCategory,
+    timestamp: Date.now(),
+    source: 'pc_upload',
+    filename: file.name,
+    fileType: file.type, // Store original file type for scheduling
+    fileSize: file.size, // Store file size
+    dimensions: dimensions, // Store image dimensions
+    isVideo: file.type.startsWith('video/') // Helper flag for easy checking
+  };
+
+  // Ensure "My PC" category exists in categories list
+  if (!categories.includes(pcCategory)) {
+    categories.push(pcCategory);
+  }
+
+  // Add to saved items in "My PC" category
+  if (!savedItems[pcCategory]) {
+    savedItems[pcCategory] = [];
+  }
+  savedItems[pcCategory].push(newPost);
+
+  // Save to storage with quota management and update counters
+  try {
+    await savePostData();
+  } catch (error) {
+    if (error.message.includes('quota')) {
+      console.warn('⚠️ Storage quota exceeded, using minimal storage approach');
+      // Create minimal post object without large data
+      const minimalPost = {
+        id: postId,
+        title: fileName,
+        caption: fileName,
+        storageId: storageId, // This is what matters for posting
+        category: pcCategory,
+        timestamp: Date.now(),
+        source: 'pc_upload',
+        filename: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        isVideo: file.type.startsWith('video/')
+      };
+
+      // Replace the post with minimal version
+      savedItems[pcCategory][savedItems[pcCategory].length - 1] = minimalPost;
+
+      // Try saving again with minimal data and update counters
+      await savePostData();
+    } else {
+      throw error;
+    }
+  }
+
+  console.log(`✅ File ${fileNumber}/${totalFiles} "${file.name}" processed and saved to library`);
+}
+
+// Helper function to create compressed preview
+async function createCompressedPreview(file) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    img.onload = () => {
+      // Calculate dimensions for preview (max 200px width/height)
+      const maxSize = 200;
+      let { width, height } = img;
+
+      if (width > height) {
+        if (width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7)); // 70% quality
+    };
+
+    img.onerror = reject;
+
+    const reader = new FileReader();
+    reader.onload = () => img.src = reader.result;
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 async function schedulePosts() {
@@ -2335,7 +2615,8 @@ function setButtonLoading(buttonId, isLoading, originalText = null) {
       'scheduleBtn': '🔄 Scheduling...',
       'publishNowBtn': '🔄 Publishing...',
       'viewQueueBtn': '🔄 Loading Queue...',
-      'testApiBtn': '🔄 Testing API...'
+      'testApiBtn': '🔄 Testing API...',
+      'uploadPcBtn': '🔄 Uploading...'
     };
 
     button.textContent = loadingTexts[buttonId] || '🔄 Loading...';
@@ -2356,23 +2637,97 @@ function setButtonLoading(buttonId, isLoading, originalText = null) {
 // Custom Presets functionality
 let customPresets = [];
 
+// Default Presets functionality
+let defaultPresets = {
+  now: { name: 'Now', icon: '⚡', type: 'relative', minutes: 5 },
+  '1hour': { name: '+1 Hour', icon: '🕐', type: 'relative', hours: 1 },
+  tomorrow: { name: 'Tomorrow', icon: '🌅', type: 'relative', days: 1, keepTime: true },
+  weekend: { name: 'Weekend', icon: '🎉', type: 'relative', days: 'weekend', hours: 10 }
+};
+
+let modifiedDefaultPresets = {};
+
 async function loadCustomPresets() {
   try {
     const result = await new Promise(resolve => {
-      chrome.storage.local.get(['customPresets'], resolve);
+      chrome.storage.local.get(['customPresets', 'modifiedDefaultPresets'], resolve);
     });
     customPresets = result.customPresets || [];
+    modifiedDefaultPresets = result.modifiedDefaultPresets || {};
     renderCustomPresets();
   } catch (error) {
     console.error('Failed to load custom presets:', error);
   }
 }
 
+async function saveModifiedDefaultPresets() {
+  try {
+    await new Promise(resolve => {
+      chrome.storage.local.set({ modifiedDefaultPresets }, resolve);
+    });
+  } catch (error) {
+    console.error('Failed to save modified default presets:', error);
+  }
+}
+
 function renderCustomPresets() {
   const container = document.getElementById('quickPresetButtons');
 
-  // Remove existing custom presets
-  container.querySelectorAll('[data-custom="true"]').forEach(btn => btn.remove());
+  // Clear all existing buttons
+  container.innerHTML = '';
+
+  // Add default presets with edit functionality
+  Object.keys(defaultPresets).forEach(presetKey => {
+    const preset = modifiedDefaultPresets[presetKey] || defaultPresets[presetKey];
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-secondary';
+    button.dataset.preset = presetKey;
+    button.style.position = 'relative';
+    button.style.marginRight = '5px';
+    button.innerHTML = `${preset.icon} ${preset.name}`;
+
+    // Add edit button for default presets
+    const editBtn = document.createElement('span');
+    editBtn.innerHTML = '✏️';
+    editBtn.style.cssText = `
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #4299e1;
+      color: white;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      font-size: 9px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 100;
+      border: 1px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      line-height: 1;
+    `;
+
+    // Show/hide edit button on hover
+    button.addEventListener('mouseenter', () => {
+      editBtn.style.display = 'flex';
+    });
+    button.addEventListener('mouseleave', () => {
+      editBtn.style.display = 'none';
+    });
+
+    // Handle edit
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showEditDefaultPresetDialog(presetKey, preset);
+    });
+
+    button.appendChild(editBtn);
+    container.appendChild(button);
+  });
 
   // Add custom presets
   customPresets.forEach((preset, index) => {
@@ -2381,38 +2736,70 @@ function renderCustomPresets() {
     button.className = 'btn btn-secondary';
     button.dataset.preset = `custom_${index}`;
     button.dataset.custom = 'true';
-    button.innerHTML = `${preset.icon || '⏰'} ${preset.name}`;
     button.style.position = 'relative';
+    button.style.marginRight = '5px';
+    button.innerHTML = `${preset.icon || '⏰'} ${preset.name}`;
 
-    // Add delete button
+    // Add edit button for custom presets
+    const editBtn = document.createElement('span');
+    editBtn.innerHTML = '✏️';
+    editBtn.style.cssText = `
+      position: absolute;
+      top: -6px;
+      right: 8px;
+      background: #4299e1;
+      color: white;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      font-size: 9px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 100;
+      border: 1px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      line-height: 1;
+    `;
+
+    // Add delete button for custom presets
     const deleteBtn = document.createElement('span');
     deleteBtn.innerHTML = '✖';
-    deleteBtn.className = 'preset-delete-btn';
     deleteBtn.style.cssText = `
       position: absolute;
-      top: -5px;
-      right: -5px;
+      top: -6px;
+      right: -6px;
       background: #e53e3e;
       color: white;
       border-radius: 50%;
       width: 16px;
       height: 16px;
-      font-size: 10px;
+      font-size: 9px;
       display: none;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      z-index: 10;
+      z-index: 100;
+      border: 1px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      line-height: 1;
     `;
 
-    button.appendChild(deleteBtn);
-
-    // Show delete button on hover
+    // Show/hide buttons on hover
     button.addEventListener('mouseenter', () => {
+      editBtn.style.display = 'flex';
       deleteBtn.style.display = 'flex';
     });
     button.addEventListener('mouseleave', () => {
+      editBtn.style.display = 'none';
       deleteBtn.style.display = 'none';
+    });
+
+    // Handle edit
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showEditCustomPresetDialog(index, preset);
     });
 
     // Handle delete
@@ -2421,11 +2808,260 @@ function renderCustomPresets() {
       deleteCustomPreset(index);
     });
 
+    button.appendChild(editBtn);
+    button.appendChild(deleteBtn);
     container.appendChild(button);
   });
 }
 
+function showEditDefaultPresetDialog(presetKey, preset) {
+  // Create or show the edit dialog
+  let dialog = document.getElementById('editDefaultPresetDialog');
+
+  if (!dialog) {
+    // Create the dialog if it doesn't exist
+    dialog = document.createElement('div');
+    dialog.id = 'editDefaultPresetDialog';
+    dialog.className = 'modal-overlay';
+    dialog.innerHTML = `
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3>✏️ Edit Default Preset</h3>
+          <button class="btn btn-secondary" id="closeEditDefaultPresetDialog">✖️ Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Preset Name</label>
+            <input type="text" class="form-input" id="editDefaultPresetName" placeholder="Enter preset name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Icon (emoji)</label>
+            <input type="text" class="form-input" id="editDefaultPresetIcon" placeholder="Enter emoji icon">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-input" id="editDefaultPresetType">
+              <option value="relative">Relative Time</option>
+              <option value="absolute">Absolute Time</option>
+            </select>
+          </div>
+          <div id="editDefaultPresetOptions">
+            <!-- Options will be populated based on type -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="saveEditedDefaultPresetBtn">💾 Save Changes</button>
+          <button class="btn btn-warning" id="resetDefaultPresetBtn">🔄 Reset to Default</button>
+          <button class="btn btn-secondary" id="cancelEditDefaultPresetBtn">❌ Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+
+    // Add event listeners
+    document.getElementById('closeEditDefaultPresetDialog').addEventListener('click', hideEditDefaultPresetDialog);
+    document.getElementById('cancelEditDefaultPresetBtn').addEventListener('click', hideEditDefaultPresetDialog);
+    document.getElementById('saveEditedDefaultPresetBtn').addEventListener('click', saveEditedDefaultPreset);
+    document.getElementById('resetDefaultPresetBtn').addEventListener('click', resetDefaultPreset);
+    document.getElementById('editDefaultPresetType').addEventListener('change', updateEditDefaultPresetOptions);
+  }
+
+  // Populate the dialog with current preset data
+  document.getElementById('editDefaultPresetName').value = preset.name;
+  document.getElementById('editDefaultPresetIcon').value = preset.icon;
+  document.getElementById('editDefaultPresetType').value = preset.type || 'relative';
+
+  // Store the preset key for updating
+  dialog.dataset.presetKey = presetKey;
+
+  // Update options based on type
+  updateEditDefaultPresetOptions();
+  populateEditDefaultPresetOptions(preset);
+
+  // Show the dialog
+  dialog.style.display = 'flex';
+}
+
+function hideEditDefaultPresetDialog() {
+  const dialog = document.getElementById('editDefaultPresetDialog');
+  if (dialog) {
+    dialog.style.display = 'none';
+  }
+}
+
+function updateEditDefaultPresetOptions() {
+  const type = document.getElementById('editDefaultPresetType').value;
+  const optionsContainer = document.getElementById('editDefaultPresetOptions');
+
+  if (type === 'relative') {
+    optionsContainer.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Minutes</label>
+        <input type="number" class="form-input" id="editDefaultPresetMinutes" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hours</label>
+        <input type="number" class="form-input" id="editDefaultPresetHours" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Days</label>
+        <input type="number" class="form-input" id="editDefaultPresetDays" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="editDefaultPresetKeepTime"> Keep current time
+        </label>
+      </div>
+    `;
+  } else {
+    optionsContainer.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Time</label>
+        <input type="time" class="form-input" id="editDefaultPresetTime">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Day of Week (optional)</label>
+        <select class="form-input" id="editDefaultPresetDayOfWeek">
+          <option value="">Any day</option>
+          <option value="0">Sunday</option>
+          <option value="1">Monday</option>
+          <option value="2">Tuesday</option>
+          <option value="3">Wednesday</option>
+          <option value="4">Thursday</option>
+          <option value="5">Friday</option>
+          <option value="6">Saturday</option>
+        </select>
+      </div>
+    `;
+  }
+}
+
+function populateEditDefaultPresetOptions(preset) {
+  const type = document.getElementById('editDefaultPresetType').value;
+
+  if (type === 'relative') {
+    document.getElementById('editDefaultPresetMinutes').value = preset.minutes || 0;
+    document.getElementById('editDefaultPresetHours').value = preset.hours || 0;
+    document.getElementById('editDefaultPresetDays').value = preset.days === 'weekend' ? 0 : (preset.days || 0);
+    document.getElementById('editDefaultPresetKeepTime').checked = preset.keepTime || false;
+  } else {
+    document.getElementById('editDefaultPresetTime').value = preset.time || '09:00';
+    document.getElementById('editDefaultPresetDayOfWeek').value = preset.dayOfWeek || '';
+  }
+}
+
+async function saveEditedDefaultPreset() {
+  const dialog = document.getElementById('editDefaultPresetDialog');
+  const presetKey = dialog.dataset.presetKey;
+
+  const name = document.getElementById('editDefaultPresetName').value.trim();
+  const icon = document.getElementById('editDefaultPresetIcon').value.trim();
+  const type = document.getElementById('editDefaultPresetType').value;
+
+  if (!name || !icon) {
+    showMessage('❌ Please fill in both name and icon', 'error');
+    return;
+  }
+
+  const modifiedPreset = { name, icon, type };
+
+  if (type === 'relative') {
+    const minutes = parseInt(document.getElementById('editDefaultPresetMinutes').value) || 0;
+    const hours = parseInt(document.getElementById('editDefaultPresetHours').value) || 0;
+    const days = parseInt(document.getElementById('editDefaultPresetDays').value) || 0;
+    const keepTime = document.getElementById('editDefaultPresetKeepTime').checked;
+
+    modifiedPreset.minutes = minutes;
+    modifiedPreset.hours = hours;
+    modifiedPreset.days = days;
+    modifiedPreset.keepTime = keepTime;
+  } else {
+    const time = document.getElementById('editDefaultPresetTime').value;
+    const dayOfWeek = document.getElementById('editDefaultPresetDayOfWeek').value;
+
+    modifiedPreset.time = time;
+    if (dayOfWeek) modifiedPreset.dayOfWeek = parseInt(dayOfWeek);
+  }
+
+  // Save the modified preset
+  modifiedDefaultPresets[presetKey] = modifiedPreset;
+  await saveModifiedDefaultPresets();
+
+  // Update the UI
+  renderCustomPresets();
+  hideEditDefaultPresetDialog();
+
+  showMessage(`✅ Default preset "${name}" updated successfully!`, 'success');
+}
+
+async function resetDefaultPreset() {
+  const dialog = document.getElementById('editDefaultPresetDialog');
+  const presetKey = dialog.dataset.presetKey;
+
+  if (confirm('Are you sure you want to reset this preset to its default settings?')) {
+    // Remove from modified presets
+    delete modifiedDefaultPresets[presetKey];
+    await saveModifiedDefaultPresets();
+
+    // Update the UI
+    renderCustomPresets();
+    hideEditDefaultPresetDialog();
+
+    showMessage(`✅ Preset reset to default successfully!`, 'success');
+  }
+}
+
+function showEditCustomPresetDialog(index, preset) {
+  // Populate the existing custom preset dialog with the preset data for editing
+  document.getElementById('customPresetName').value = preset.name;
+  document.getElementById('customPresetIcon').value = preset.icon || '⏰';
+  document.getElementById('customPresetType').value = preset.type || 'relative';
+
+  // Show the appropriate options
+  showPresetOptions(preset.type || 'relative');
+
+  // Populate the options based on preset type
+  if (preset.type === 'relative') {
+    document.getElementById('relativeAmount').value = preset.amount || 1;
+    document.getElementById('relativeUnit').value = preset.unit || 'hours';
+  } else if (preset.type === 'absolute') {
+    document.getElementById('absoluteTime').value = preset.time || '09:00';
+  } else if (preset.type === 'next_day') {
+    document.getElementById('nextDayWeekday').value = preset.weekday || 1;
+    document.getElementById('nextDayTime').value = preset.time || '09:00';
+  }
+
+  // Store the index for updating
+  const dialog = document.getElementById('customPresetDialog');
+  dialog.dataset.editingIndex = index;
+
+  // Change the save button text
+  const saveBtn = document.getElementById('saveCustomPresetBtn');
+  saveBtn.textContent = '💾 Update Preset';
+
+  // Show the dialog
+  dialog.style.display = 'flex';
+}
+
 function showCustomPresetDialog() {
+  // Reset the dialog for creating a new preset
+  document.getElementById('customPresetName').value = '';
+  document.getElementById('customPresetIcon').value = '⏰';
+  document.getElementById('customPresetType').value = 'relative';
+  document.getElementById('relativeAmount').value = 1;
+  document.getElementById('relativeUnit').value = 'hours';
+
+  // Show relative options by default
+  showPresetOptions('relative');
+
+  // Clear editing index
+  const dialog = document.getElementById('customPresetDialog');
+  delete dialog.dataset.editingIndex;
+
+  // Reset save button text
+  const saveBtn = document.getElementById('saveCustomPresetBtn');
+  saveBtn.textContent = '💾 Save Preset';
+
   document.getElementById('customPresetDialog').style.display = 'flex';
 
   // Reset form
@@ -2463,7 +3099,21 @@ function showPresetOptions(type) {
   });
 
   // Show selected option
-  const optionId = type + (type === 'relative' ? 'TimeOptions' : type === 'absolute' ? 'TimeOptions' : 'Options');
+  let optionId;
+  switch (type) {
+    case 'relative':
+      optionId = 'relativeTimeOptions';
+      break;
+    case 'absolute':
+      optionId = 'absoluteTimeOptions';
+      break;
+    case 'next_day':
+      optionId = 'nextDayOptions';
+      break;
+    default:
+      optionId = 'relativeTimeOptions';
+  }
+
   const element = document.getElementById(optionId);
   if (element) {
     element.style.display = 'block';
@@ -2502,19 +3152,41 @@ async function saveCustomPreset() {
       break;
   }
 
-  // Save to storage
-  customPresets.push(preset);
+  // Check if we're editing an existing preset
+  const dialog = document.getElementById('customPresetDialog');
+  const editingIndex = dialog.dataset.editingIndex;
 
-  try {
-    await new Promise(resolve => {
-      chrome.storage.local.set({ customPresets }, resolve);
-    });
+  if (editingIndex !== undefined) {
+    // Update existing preset
+    const index = parseInt(editingIndex);
+    customPresets[index] = preset;
 
-    renderCustomPresets();
-    hideCustomPresetDialog();
-    showMessage(`✅ Custom preset "${name}" created successfully!`, 'success');
-  } catch (error) {
-    showMessage(`❌ Failed to save preset: ${error.message}`, 'error');
+    try {
+      await new Promise(resolve => {
+        chrome.storage.local.set({ customPresets }, resolve);
+      });
+
+      renderCustomPresets();
+      hideCustomPresetDialog();
+      showMessage(`✅ Custom preset "${name}" updated successfully!`, 'success');
+    } catch (error) {
+      showMessage(`❌ Failed to update preset: ${error.message}`, 'error');
+    }
+  } else {
+    // Create new preset
+    customPresets.push(preset);
+
+    try {
+      await new Promise(resolve => {
+        chrome.storage.local.set({ customPresets }, resolve);
+      });
+
+      renderCustomPresets();
+      hideCustomPresetDialog();
+      showMessage(`✅ Custom preset "${name}" created successfully!`, 'success');
+    } catch (error) {
+      showMessage(`❌ Failed to save preset: ${error.message}`, 'error');
+    }
   }
 }
 
@@ -2762,10 +3434,8 @@ async function confirmCsvImport() {
       importedCount++;
     });
 
-    // Save to storage
-    await new Promise(resolve => {
-      chrome.storage.local.set({ savedItems, categories }, resolve);
-    });
+    // Save to storage and update counters
+    await savePostData();
 
     // Refresh the UI
     await loadSavedData();
@@ -2811,6 +3481,20 @@ async function exportToCsv() {
       const finalTitle = post.titleOverridden ? post.overriddenTitle : (post.title || '');
       const finalCaption = post.captionOverridden ? post.overriddenCaption : (post.caption || '');
 
+      // Get the proper download URL (same logic as download function)
+      let exportUrl = '';
+      if (post.storageId) {
+        exportUrl = `https://api.robopost.app/stored_objects/${post.storageId}/download`;
+      } else if (post.originalDataUrl) {
+        exportUrl = post.originalDataUrl;
+      } else if (post.originalUrl) {
+        exportUrl = post.originalUrl;
+      } else if (post.videoUrl) {
+        exportUrl = post.videoUrl;
+      } else if (post.imageUrl) {
+        exportUrl = post.imageUrl;
+      }
+
       // Clean the text to handle CSV formatting
       const cleanTitle = finalTitle.replace(/[\n\r]+/g, ' ').replace(/"/g, '""');
       const cleanCaption = finalCaption.replace(/[\n\r]+/g, ' ').replace(/"/g, '""');
@@ -2821,7 +3505,7 @@ async function exportToCsv() {
       // Format timestamp
       const timestamp = post.timestamp ? new Date(post.timestamp).toISOString() : '';
 
-      csvContent += `"${post.imageUrl || ''}","${cleanCaption}","${cleanTitle}","${cleanCategory}","${cleanSource}","${timestamp}","${post.isVideo || false}","${cleanFileType}"\n`;
+      csvContent += `"${exportUrl}","${cleanCaption}","${cleanTitle}","${cleanCategory}","${cleanSource}","${timestamp}","${post.isVideo || false}","${cleanFileType}"\n`;
     });
 
     // Create and download the file
@@ -3273,6 +3957,15 @@ function updatePromptButtonsForTarget(target) {
       button.textContent = `${prompt.icon || '🎯'} ${prompt.name}`;
       button.addEventListener('click', handleRewriteClick);
 
+      // Create edit button
+      const editButton = document.createElement('button');
+      editButton.className = 'btn btn-small edit-custom-prompt-btn';
+      editButton.setAttribute('data-target', target);
+      editButton.setAttribute('data-prompt', prompt.name.toLowerCase());
+      editButton.textContent = '✏️';
+      editButton.title = 'Edit custom prompt';
+      editButton.addEventListener('click', editCustomPrompt);
+
       // Create delete button
       const deleteButton = document.createElement('button');
       deleteButton.className = 'btn btn-small delete-custom-prompt-btn';
@@ -3283,6 +3976,7 @@ function updatePromptButtonsForTarget(target) {
       deleteButton.addEventListener('click', deleteCustomPrompt);
 
       buttonGroup.appendChild(button);
+      buttonGroup.appendChild(editButton);
       buttonGroup.appendChild(deleteButton);
 
       // Insert before the "Custom" button
@@ -3321,6 +4015,152 @@ function deleteCustomPrompt(event) {
 
       showMessage(`✅ Custom prompt "${promptName}" deleted successfully!`, 'success');
     }
+  }
+}
+
+function editCustomPrompt(event) {
+  event.stopPropagation();
+
+  const target = event.target.getAttribute('data-target');
+  const promptName = event.target.getAttribute('data-prompt');
+
+  // Find the custom prompt
+  if (window.geminiRewritePrompts[target]) {
+    const prompt = window.geminiRewritePrompts[target].find(p =>
+      p.custom && p.name.toLowerCase() === promptName.toLowerCase()
+    );
+
+    if (prompt) {
+      showEditCustomPromptDialog(target, prompt);
+    } else {
+      showMessage('❌ Custom prompt not found', 'error');
+    }
+  }
+}
+
+function showEditCustomPromptDialog(target, prompt) {
+  // Create or show the edit dialog
+  let dialog = document.getElementById('editCustomPromptDialog');
+
+  if (!dialog) {
+    // Create the dialog if it doesn't exist
+    dialog = document.createElement('div');
+    dialog.id = 'editCustomPromptDialog';
+    dialog.className = 'modal-overlay';
+    dialog.innerHTML = `
+      <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3>✏️ Edit Custom Prompt</h3>
+          <button class="btn btn-secondary" id="closeEditCustomPromptDialog">✖️ Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Target</label>
+            <select class="form-input" id="editCustomPromptTarget" disabled>
+              <option value="title">Title</option>
+              <option value="caption">Caption</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prompt Name</label>
+            <input type="text" class="form-input" id="editCustomPromptName" placeholder="Enter prompt name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prompt Text</label>
+            <textarea class="form-input" id="editCustomPromptText" rows="4" placeholder="Enter your custom prompt"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Icon (optional)</label>
+            <input type="text" class="form-input" id="editCustomPromptIcon" placeholder="Enter emoji icon (e.g., 🎯)">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="saveEditedCustomPromptBtn">💾 Save Changes</button>
+          <button class="btn btn-secondary" id="cancelEditCustomPromptBtn">❌ Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+
+    // Add event listeners
+    document.getElementById('closeEditCustomPromptDialog').addEventListener('click', hideEditCustomPromptDialog);
+    document.getElementById('cancelEditCustomPromptBtn').addEventListener('click', hideEditCustomPromptDialog);
+    document.getElementById('saveEditedCustomPromptBtn').addEventListener('click', saveEditedCustomPrompt);
+  }
+
+  // Populate the dialog with current prompt data
+  document.getElementById('editCustomPromptTarget').value = target;
+  document.getElementById('editCustomPromptName').value = prompt.name;
+  document.getElementById('editCustomPromptText').value = prompt.prompt;
+  document.getElementById('editCustomPromptIcon').value = prompt.icon || '🎯';
+
+  // Store the original prompt data for updating
+  dialog.dataset.originalTarget = target;
+  dialog.dataset.originalName = prompt.name.toLowerCase();
+
+  // Show the dialog
+  dialog.style.display = 'flex';
+}
+
+function hideEditCustomPromptDialog() {
+  const dialog = document.getElementById('editCustomPromptDialog');
+  if (dialog) {
+    dialog.style.display = 'none';
+  }
+}
+
+async function saveEditedCustomPrompt() {
+  const dialog = document.getElementById('editCustomPromptDialog');
+  const target = dialog.dataset.originalTarget;
+  const originalName = dialog.dataset.originalName;
+
+  const newName = document.getElementById('editCustomPromptName').value.trim();
+  const newPromptText = document.getElementById('editCustomPromptText').value.trim();
+  const newIcon = document.getElementById('editCustomPromptIcon').value.trim() || '🎯';
+
+  if (!newName || !newPromptText) {
+    showMessage('❌ Please fill in both name and prompt text', 'error');
+    return;
+  }
+
+  try {
+    // Find and update the custom prompt
+    if (window.geminiRewritePrompts[target]) {
+      const promptIndex = window.geminiRewritePrompts[target].findIndex(p =>
+        p.custom && p.name.toLowerCase() === originalName
+      );
+
+      if (promptIndex !== -1) {
+        // Update the prompt
+        window.geminiRewritePrompts[target][promptIndex] = {
+          ...window.geminiRewritePrompts[target][promptIndex],
+          name: newName,
+          prompt: newPromptText,
+          icon: newIcon
+        };
+
+        // Save to storage
+        const customPrompts = {
+          title: window.geminiRewritePrompts.title.filter(p => p.custom || p.modified),
+          caption: window.geminiRewritePrompts.caption.filter(p => p.custom || p.modified)
+        };
+
+        window.saveCustomPrompts(customPrompts);
+
+        // Update the UI
+        updatePromptButtons();
+
+        // Hide the dialog
+        hideEditCustomPromptDialog();
+
+        showMessage(`✅ Custom prompt "${newName}" updated successfully!`, 'success');
+      } else {
+        showMessage('❌ Custom prompt not found', 'error');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to save edited custom prompt:', error);
+    showMessage('❌ Failed to save changes', 'error');
   }
 }
 
@@ -3658,6 +4498,25 @@ function updateEditButtonState() {
     aiEditBtn.title = '🤖 Create new image with AI Image+';
   } else {
     aiEditBtn.title = '🤖 Create/edit image with AI Image+';
+  }
+
+  // Update download button state
+  const downloadBtn = document.getElementById('downloadPostsBtn');
+  if (downloadBtn) {
+    const selectedPostsArray = Array.from(selectedPosts).map(postId => window.getPostById(postId));
+    const hasMediaPosts = selectedPostsArray.some(post => post && (post.imageUrl || post.videoUrl));
+
+    if (selectedPosts.size === 0) {
+      downloadBtn.disabled = true;
+      downloadBtn.title = 'Select posts to download';
+    } else if (!hasMediaPosts) {
+      downloadBtn.disabled = true;
+      downloadBtn.title = 'No media posts selected for download';
+    } else {
+      downloadBtn.disabled = false;
+      const mediaCount = selectedPostsArray.filter(post => post && (post.imageUrl || post.videoUrl)).length;
+      downloadBtn.title = `Download ${mediaCount} media file(s)`;
+    }
   }
 }
 
@@ -4213,6 +5072,19 @@ async function handleEditedImageSave(postId, editedImageDataUrl) {
   }
 }
 
+async function updateCounters() {
+  // Recalculate counters based on current savedItems
+  const allPosts = Object.values(savedItems).flat();
+  const counters = {
+    captionCount: allPosts.filter(post => post.caption && post.caption.trim().length > 0).length,
+    linkCount: allPosts.filter(post => post.imageUrl || post.videoUrl || post.originalUrl).length
+  };
+
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ counters }, resolve);
+  });
+}
+
 async function savePostData() {
   // Save the updated posts data to storage with quota management
   const dataToSave = {
@@ -4222,6 +5094,9 @@ async function savePostData() {
 
   return new Promise(async (resolve, reject) => {
     try {
+      // Update counters first
+      await updateCounters();
+
       // First, try to save normally
       chrome.storage.local.set(dataToSave, async () => {
         if (chrome.runtime.lastError) {
@@ -4385,6 +5260,18 @@ window.testSaveFeature = async function() {
   console.log('3. Save buttons should appear automatically');
   console.log('4. Click save to override the values');
   console.log('5. Select another post and come back - your saved values should load');
+};
+
+// Debug function to refresh context menu
+window.debugRefreshContextMenu = function() {
+  console.log('🔄 Refreshing context menu...');
+  chrome.runtime.sendMessage({ action: "refreshContextMenu" }, (response) => {
+    if (response && response.success) {
+      console.log('✅ Context menu refreshed successfully');
+    } else {
+      console.error('❌ Failed to refresh context menu');
+    }
+  });
 };
 
 // Initialize when DOM is loaded
