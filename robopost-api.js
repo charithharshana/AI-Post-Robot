@@ -871,21 +871,36 @@ class RoboPostAPI {
       try {
         const scheduleTime = new Date(currentTime.getTime() + (i * intervalMinutes * 60000));
 
-        console.log(`📅 Scheduling post ${i + 1}/${items.length}:`, {
-          imageUrl: item.imageUrl,
-          caption: item.caption?.substring(0, 50) + '...',
-          channelIds: channelIds,
-          scheduleAt: scheduleTime.toISOString()
-        });
-
-        const result = await this.schedulePostFromCapture({
-          imageUrl: item.imageUrl,
+        // Prepare schedule options with high-quality image source
+        const scheduleOptions = {
           caption: item.caption,
           title: item.caption, // Use caption as title as requested
           channelIds: channelIds,
           scheduleAt: scheduleTime.toISOString(),
           platformSettings: platformSettings
-        });
+        };
+
+        // Set image source - prioritize high-quality options
+        if (item.storageId) {
+          // Use storageId for original quality (PC uploads, AI images)
+          scheduleOptions.storageId = item.storageId;
+          scheduleOptions.isVideo = item.isVideo;
+          console.log(`📅 Scheduling post ${i + 1}/${items.length} with original quality (storage_id):`, item.storageId);
+        } else if (item.originalUrl) {
+          // Use original URL for social media captures
+          scheduleOptions.imageUrl = item.originalUrl;
+          console.log(`📅 Scheduling post ${i + 1}/${items.length} with original URL:`, item.originalUrl);
+        } else if (item.imageUrl) {
+          // Fallback to compressed preview
+          scheduleOptions.imageUrl = item.imageUrl;
+          console.warn(`⚠️ Scheduling post ${i + 1}/${items.length} with compressed preview:`, item.imageUrl);
+        } else {
+          // Text-only post
+          scheduleOptions.isTextOnly = true;
+          console.log(`📅 Scheduling text-only post ${i + 1}/${items.length}`);
+        }
+
+        const result = await this.schedulePostFromCapture(scheduleOptions);
 
         console.log(`✅ Post ${i + 1} scheduled successfully:`, result);
 

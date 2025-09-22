@@ -2318,7 +2318,20 @@ async function publishNow() {
 
     if (publishType === 'album' && selectedPosts.size > 1) {
       const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
-      const imageUrls = posts.map(post => post.imageUrl);
+      // Use high-quality images: storageId (PC uploads), originalUrl (social media), or imageUrl (fallback)
+      const imageUrls = posts.map(post => {
+        if (post.storageId) {
+          // For PC uploads, use RoboPost storage URL for original quality
+          return `https://api.robopost.app/stored_objects/${post.storageId}/download`;
+        } else if (post.originalUrl) {
+          // For social media captures, use original URL
+          return post.originalUrl;
+        } else {
+          // Fallback to compressed preview (should be rare)
+          console.warn('⚠️ Using compressed preview for album post:', post.id);
+          return post.imageUrl;
+        }
+      });
 
       // DEBUG: Get platform settings and log them
       const platformSettings = getPlatformSpecificSettings();
@@ -2357,7 +2370,20 @@ async function publishNow() {
 
 async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
   const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
-  const imageUrls = posts.map(post => post.imageUrl);
+  // Use high-quality images: storageId (PC uploads), originalUrl (social media), or imageUrl (fallback)
+  const imageUrls = posts.map(post => {
+    if (post.storageId) {
+      // For PC uploads, use RoboPost storage URL for original quality
+      return `https://api.robopost.app/stored_objects/${post.storageId}/download`;
+    } else if (post.originalUrl) {
+      // For social media captures, use original URL
+      return post.originalUrl;
+    } else {
+      // Fallback to compressed preview (should be rare)
+      console.warn('⚠️ Using compressed preview for album post:', post.id);
+      return post.imageUrl;
+    }
+  });
 
   try {
     // DEBUG: Get platform settings and log them
@@ -2459,7 +2485,6 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
       });
 
       const scheduleOptions = {
-        imageUrl: post.imageUrl,
         caption: finalCaption,
         channelIds: channels,
         scheduleAt: scheduleTime.toISOString(),
@@ -2468,15 +2493,26 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
         platformSettings: platformSettings
       };
 
-      // Handle storage: existing storageId or upload now if needed (skip for text-only posts)
-      if (post.isTextOnly) {
-        console.log(`Scheduling text-only post ${i + 1} (no media)`);
-      } else if (post.storageId) {
-        // Already uploaded (PC upload or old AI images)
-        scheduleOptions.storageId = post.storageId;
-        scheduleOptions.isVideo = post.isVideo;
-        console.log(`Using existing storage_id for post ${i + 1}:`, post.storageId, post.isVideo ? '(video)' : '(image)');
-      } else if (post.needsUpload && post.file) {
+      // Set image source - prioritize high-quality options
+      if (!post.isTextOnly) {
+        if (post.storageId) {
+          // Use storageId for original quality (PC uploads, AI images)
+          scheduleOptions.storageId = post.storageId;
+          scheduleOptions.isVideo = post.isVideo;
+          console.log(`📸 Using original quality via storage_id for post ${i + 1}:`, post.storageId);
+        } else if (post.originalUrl) {
+          // Use original URL for social media captures
+          scheduleOptions.imageUrl = post.originalUrl;
+          console.log(`📸 Using original URL for post ${i + 1}:`, post.originalUrl);
+        } else {
+          // Fallback to compressed preview
+          scheduleOptions.imageUrl = post.imageUrl;
+          console.warn(`⚠️ Using compressed preview for post ${i + 1}:`, post.imageUrl);
+        }
+      }
+
+      // Handle AI images that need uploading during scheduling
+      if (post.needsUpload && post.file) {
         // AI generated image that needs uploading now
         console.log(`📤 Uploading AI generated image for post ${i + 1} during scheduling...`);
         try {
