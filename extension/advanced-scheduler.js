@@ -470,8 +470,8 @@ function updateSelectedPostsInfo() {
       // Always update fields when a single post is selected
       if (selectedPosts.size === 1) {
         // Use overridden values if they exist, otherwise use original values
-        // Priority: overridden title > original title > caption as fallback
-        const displayTitle = firstPost.titleOverridden ? firstPost.overriddenTitle : (firstPost.title || firstPost.caption);
+        // Note: Title defaults to caption value (original behavior)
+        const displayTitle = firstPost.titleOverridden ? firstPost.overriddenTitle : firstPost.caption;
         const displayCaption = firstPost.captionOverridden ? firstPost.overriddenCaption : firstPost.caption;
 
         captionTextarea.value = displayCaption || '';
@@ -1088,7 +1088,8 @@ function setupEventListeners() {
   // CSV Export button
   document.getElementById('csvExportBtn').addEventListener('click', exportToCsv);
 
-
+  // Setup drag and drop functionality
+  setupDragAndDrop();
 
   // Schedule buttons
   document.getElementById('scheduleBtn').addEventListener('click', schedulePosts);
@@ -1257,18 +1258,10 @@ async function saveTitleOverride() {
   const newTitle = titleInput.value.trim();
 
   try {
-    // Preserve original title if it doesn't exist yet
-    if (!post.title && !post.titleOverridden) {
-      // This is the first time user is setting a title, save it as the original title
-      post.title = newTitle;
-      console.log('Saved original title for post:', postId, 'Title:', newTitle);
-    } else {
-      // Save as override since original title already exists
-      post.overriddenTitle = newTitle;
-      post.titleOverridden = true;
-      post.titleOverriddenAt = new Date().toISOString();
-      console.log('Saved title override for post:', postId, 'New title:', newTitle);
-    }
+    // Save the overridden title
+    post.overriddenTitle = newTitle;
+    post.titleOverridden = true;
+    post.titleOverriddenAt = new Date().toISOString();
 
     // Save to storage
     await savePostData();
@@ -2072,6 +2065,180 @@ async function uploadFilesSequentially() {
   showMessage(`🎉 All done! Uploaded ${totalFiles} file(s) to library!`, 'success');
 }
 
+/**
+ * Setup drag and drop functionality for the entire page
+ */
+function setupDragAndDrop() {
+  const dropZone = document.body; // Use entire page as drop zone
+  let dragCounter = 0; // Track drag enter/leave events
+
+  // Create drag overlay
+  const dragOverlay = document.createElement('div');
+  dragOverlay.id = 'dragOverlay';
+  dragOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 123, 255, 0.1);
+    border: 3px dashed #007bff;
+    z-index: 10000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: #007bff;
+    pointer-events: none;
+  `;
+  dragOverlay.innerHTML = '📁 Drop images/videos here to upload to "My PC" category';
+  document.body.appendChild(dragOverlay);
+
+  // Prevent default drag behaviors on the entire document
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    document.addEventListener(eventName, preventDefaults, false);
+  });
+
+  function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // Handle drag enter
+  document.addEventListener('dragenter', function(e) {
+    dragCounter++;
+    if (e.dataTransfer.types.includes('Files')) {
+      dragOverlay.style.display = 'flex';
+    }
+  });
+
+  // Handle drag leave
+  document.addEventListener('dragleave', function(e) {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      dragOverlay.style.display = 'none';
+    }
+  });
+
+  // Handle drag over
+  document.addEventListener('dragover', function(e) {
+    if (e.dataTransfer.types.includes('Files')) {
+      dragOverlay.style.display = 'flex';
+    }
+  });
+
+  // Handle drop
+  document.addEventListener('drop', function(e) {
+    dragCounter = 0;
+    dragOverlay.style.display = 'none';
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      handleDragAndDropUpload(files);
+    }
+  });
+}
+
+/**
+ * Handle files dropped via drag and drop
+ */
+async function handleDragAndDropUpload(files) {
+  console.log(`📁 Drag & Drop: ${files.length} file(s) dropped`);
+
+  // Filter for image and video files only
+  const mediaFiles = files.filter(file =>
+    file.type.startsWith('image/') || file.type.startsWith('video/')
+  );
+
+  if (mediaFiles.length === 0) {
+    showMessage('❌ No valid image or video files found. Please drop image/video files only.', 'error');
+    return;
+  }
+
+  if (mediaFiles.length !== files.length) {
+    const skipped = files.length - mediaFiles.length;
+    showMessage(`⚠️ Skipped ${skipped} non-media file(s). Only images and videos are supported.`, 'warning');
+  }
+
+  // Show confirmation message
+  showMessage(`📁 Starting upload of ${mediaFiles.length} file(s) via drag & drop...`, 'info');
+
+  // Use the same upload logic as the PC upload button
+  try {
+    // Set up multiple file upload
+    isUploadingMultipleFiles = true;
+    uploadQueue = mediaFiles;
+    currentUploadIndex = 0;
+
+    // Update button state to show upload in progress
+    const uploadBtn = document.getElementById('uploadPcBtn');
+    if (uploadBtn) {
+      uploadBtn.textContent = `📁 Uploading ${mediaFiles.length} file(s)...`;
+      uploadBtn.disabled = true;
+    }
+
+    // Process each file
+    for (let i = 0; i < mediaFiles.length; i++) {
+      const file = mediaFiles[i];
+      console.log(`📁 Drag & Drop: Processing file ${i + 1}/${mediaFiles.length}: ${file.name}`);
+
+      try {
+        await uploadSingleFile(file, i + 1, mediaFiles.length);
+
+        // Force refresh the library after each successful upload
+        console.log(`✅ Drag & Drop: File ${i + 1}/${mediaFiles.length} uploaded, refreshing library...`);
+
+        // Reload categories and posts
+        loadCategoryTabs();
+        loadPosts();
+        updateStats();
+
+        // Show individual file success message
+        showMessage(`✅ Drag & Drop: File ${i + 1}/${mediaFiles.length} "${file.name}" uploaded!`, 'success');
+
+        // Small delay to ensure UI updates
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error(`❌ Drag & Drop: Failed to upload file ${i + 1}/${mediaFiles.length}:`, error);
+        showMessage(`❌ Failed to upload "${file.name}": ${error.message}`, 'error');
+        // Continue with next file even if one fails
+      }
+    }
+
+    // Reset button state
+    if (uploadBtn) {
+      uploadBtn.textContent = '📁 Upload from PC';
+      uploadBtn.disabled = false;
+    }
+
+    // Reset upload state
+    isUploadingMultipleFiles = false;
+    uploadQueue = [];
+    currentUploadIndex = 0;
+
+    // Show final completion message
+    showMessage(`🎉 Drag & Drop complete! Uploaded ${mediaFiles.length} file(s) to "My PC" category!`, 'success');
+
+  } catch (error) {
+    console.error('❌ Drag & Drop upload failed:', error);
+    showMessage(`❌ Drag & Drop upload failed: ${error.message}`, 'error');
+
+    // Reset states on error
+    isUploadingMultipleFiles = false;
+    uploadQueue = [];
+    currentUploadIndex = 0;
+
+    const uploadBtn = document.getElementById('uploadPcBtn');
+    if (uploadBtn) {
+      uploadBtn.textContent = '📁 Upload from PC';
+      uploadBtn.disabled = false;
+    }
+  }
+}
+
 async function uploadSingleFile(file, fileNumber, totalFiles) {
   console.log(`📁 Uploading file ${fileNumber}/${totalFiles}:`, file.name, file.size, 'bytes');
 
@@ -2468,8 +2635,7 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
         finalTitle = title.trim();
       } else {
         // Use individual post's title (with override if exists)
-        // Priority: overridden title > original title > caption as fallback
-        finalTitle = post.titleOverridden ? post.overriddenTitle : (post.title || post.caption);
+        finalTitle = post.titleOverridden ? post.overriddenTitle : post.caption;
       }
 
       if (userEditedCaption && caption && caption.trim()) {
@@ -5478,17 +5644,7 @@ async function startQueueRewrite(target, promptType) {
 
 function getCurrentTextForPost(post, target) {
   if (target === 'title') {
-    // Priority order for title text:
-    // 1. User's overridden title (if exists)
-    // 2. Original title from post (if exists)
-    // 3. Caption as fallback (only if no title exists)
-    if (post.titleOverridden && post.overriddenTitle) {
-      return post.overriddenTitle;
-    } else if (post.title) {
-      return post.title;
-    } else {
-      return post.caption || '';
-    }
+    return post.titleOverridden ? post.overriddenTitle : (post.caption || '');
   } else {
     return post.captionOverridden ? post.overriddenCaption : (post.caption || '');
   }

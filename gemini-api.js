@@ -170,10 +170,15 @@ class GeminiAPI {
    * Rewrite text with specific instructions
    */
   async rewriteText(originalText, instruction, options = {}) {
+    // Detect the language of the original text for better consistency
+    const languageHint = this.detectLanguageHint(originalText);
+
     const prompt = `${instruction}
 
 Original text:
 "${originalText}"
+
+${languageHint}
 
 Rewritten text:`;
 
@@ -182,6 +187,25 @@ Rewritten text:`;
       maxTokens: 500,
       ...options
     });
+  }
+
+  /**
+   * Detect language hint for better consistency
+   */
+  detectLanguageHint(text) {
+    if (!text || text.trim().length === 0) {
+      return "IMPORTANT: Maintain the same language as the original text.";
+    }
+
+    // Simple language detection based on common patterns
+    const englishPattern = /^[a-zA-Z0-9\s.,!?'"()-]+$/;
+    const hasEnglishWords = /\b(the|and|or|but|in|on|at|to|for|of|with|by)\b/i.test(text);
+
+    if (englishPattern.test(text.trim()) && hasEnglishWords) {
+      return "IMPORTANT: The original text is in English. Write your response in English only.";
+    } else {
+      return "IMPORTANT: Write your response in the EXACT SAME LANGUAGE as the original text. Do not translate or change the language.";
+    }
   }
 
   /**
@@ -660,11 +684,15 @@ Rewritten text:`;
       console.log(`🔄 ${modelRecommendation.reason}`);
     }
 
-    // Create prompt with media context
+    // Create prompt with media context and language consistency
+    const languageHint = this.detectLanguageHint(originalText);
+
     const prompt = `${instruction}
 
 Original text:
 "${originalText}"
+
+${languageHint}
 
 Rewritten text:`;
 
@@ -829,25 +857,25 @@ window.geminiRewritePrompts = {
     {
       name: "Make Engaging Title",
       icon: "✨",
-      prompt: "Based on this image/video and text, create a short, engaging title. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video and text, create a short, engaging title. IMPORTANT: Write the title in the EXACT SAME LANGUAGE as the original text. If the original text is in English, write in English. If it's in another language, use that language. Provide only one option:",
       editable: true
     },
     {
       name: "Shorten Title",
       icon: "📝",
-      prompt: "Based on this image/video and text, create a short, concise title. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video and text, create a short, concise title. IMPORTANT: Write the title in the EXACT SAME LANGUAGE as the original text. If the original text is in English, write in English. If it's in another language, use that language. Provide only one option:",
       editable: true
     },
     {
       name: "Professional Title",
       icon: "💼",
-      prompt: "Based on this image/video and text, create a short, professional title. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video and text, create a short, professional title. IMPORTANT: Write the title in the EXACT SAME LANGUAGE as the original text. If the original text is in English, write in English. If it's in another language, use that language. Provide only one option:",
       editable: true
     },
     {
       name: "Casual Title",
       icon: "😊",
-      prompt: "Based on this image/video and text, create a short, casual title. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video and text, create a short, casual title. IMPORTANT: Write the title in the EXACT SAME LANGUAGE as the original text. If the original text is in English, write in English. If it's in another language, use that language. Provide only one option:",
       editable: true
     }
   ],
@@ -855,25 +883,25 @@ window.geminiRewritePrompts = {
     {
       name: "Make Engaging Caption",
       icon: "✨",
-      prompt: "Based on this image/video, rewrite this text as an engaging social media caption. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video, rewrite this text as an engaging social media caption in the same language. Provide only one option:",
       editable: true
     },
     {
       name: "Shorten Caption",
       icon: "📝",
-      prompt: "Based on this image/video, rewrite this text as a shorter social media caption. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video, rewrite this text as a shorter social media caption in the same language. Provide only one option:",
       editable: true
     },
     {
       name: "Professional Caption",
       icon: "💼",
-      prompt: "Based on this image/video, rewrite this text as a professional social media caption. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video, rewrite this text as a professional social media caption in the same language. Provide only one option:",
       editable: true
     },
     {
       name: "Casual Caption",
       icon: "😊",
-      prompt: "Based on this image/video, rewrite this text as a casual social media caption. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:",
+      prompt: "Based on this image/video, rewrite this text as a casual social media caption in the same language. Provide only one option:",
       editable: true
     }
   ]
