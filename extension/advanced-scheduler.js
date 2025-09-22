@@ -5554,11 +5554,43 @@ async function startQueueRewrite(target, promptType) {
   let successCount = 0;
   let errorCount = 0;
 
+  // Get the base text from the first post for consistent context
+  // This ensures all posts use the same meaningful context instead of filename-based captions
+  const firstPost = window.getPostById(postsArray[0]);
+  let baseText = '';
+
+  if (firstPost) {
+    // Check if user has manually edited the form fields (priority)
+    const titleInput = document.getElementById('postTitle');
+    const captionTextarea = document.getElementById('postCaption');
+
+    if (target === 'title' && userEditedTitle && titleInput && titleInput.value.trim()) {
+      // Use manually edited title from form
+      baseText = titleInput.value.trim();
+      console.log('🎯 Queue mode: Using manually edited title from form as base context');
+    } else if (target === 'caption' && userEditedCaption && captionTextarea && captionTextarea.value.trim()) {
+      // Use manually edited caption from form
+      baseText = captionTextarea.value.trim();
+      console.log('🎯 Queue mode: Using manually edited caption from form as base context');
+    } else {
+      // Use first post's current text (with overrides if they exist)
+      baseText = getCurrentTextForPost(firstPost, target);
+      console.log('🎯 Queue mode: Using first post\'s text as base context');
+    }
+  }
+
+  if (!baseText.trim()) {
+    showMessage(`❌ Cannot start queue rewrite: First post has no ${target} text to use as context`, 'error');
+    queueRewriteInProgress = false;
+    return;
+  }
+
   // Show queue mode UI
   showQueueModeIndicator(true, target, promptData.name);
   updateQueueProgress(0, totalPosts);
 
-  showMessage(`🔄 Starting queue rewrite: ${promptData.name} for ${totalPosts} posts`, 'info');
+  showMessage(`🔄 Starting queue rewrite: ${promptData.name} for ${totalPosts} posts using consistent context`, 'info');
+  console.log(`📝 Queue base text for ${target}:`, baseText.substring(0, 100) + '...');
 
   try {
     for (let i = 0; i < postsArray.length; i++) {
@@ -5579,18 +5611,13 @@ async function startQueueRewrite(target, promptType) {
       }
 
       try {
-        // Get current text based on target
-        const currentText = getCurrentTextForPost(post, target);
+        // Use the base text for all posts to ensure consistent context
+        // This is the key fix: instead of using each post's individual text,
+        // we use the first post's meaningful text for all posts
+        const contextText = baseText;
 
-        if (!currentText.trim()) {
-          console.log(`Post ${i + 1}: Skipped ${target} (empty)`);
-          completedPosts++;
-          updateQueueProgress(completedPosts, totalPosts);
-          continue;
-        }
-
-        // Rewrite the text
-        const rewrittenText = await rewriteWithMedia(currentText, promptData.prompt, post.imageUrl);
+        // Rewrite the text using consistent context
+        const rewrittenText = await rewriteWithMedia(contextText, promptData.prompt, post.imageUrl);
 
         // Save the rewritten text
         if (target === 'title') {
@@ -5607,7 +5634,7 @@ async function startQueueRewrite(target, promptType) {
         await savePostData();
 
         successCount++;
-        console.log(`Post ${i + 1}: ${target} rewritten successfully`);
+        console.log(`Post ${i + 1}: ${target} rewritten successfully with consistent context`);
 
         // Add a small delay between requests to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 500));

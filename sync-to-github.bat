@@ -72,19 +72,47 @@ xcopy "%EXTENSION_DIR%" "%TEMP_DIR%" /e /i /q > nul
 echo 🔧 Setting up git repository...
 cd "%TEMP_DIR%"
 git init
+git remote add origin "%GITHUB_REPO%"
+
+REM Fetch the existing repository to compare changes
+echo 📥 Fetching existing repository for change detection...
+git fetch origin %BRANCH% 2>nul || echo "   📝 No existing branch found, will create new one"
+
+REM Check if branch exists
+git ls-remote --heads origin %BRANCH% >nul 2>&1
+if !errorlevel! equ 0 (
+    echo "   📋 Existing branch found, checking for changes..."
+    git checkout -b %BRANCH% origin/%BRANCH% 2>nul || git checkout -b %BRANCH%
+) else (
+    echo "   🆕 Creating new branch..."
+    git checkout -b %BRANCH%
+)
+
 git add .
 
-REM Create commit message with timestamp
+REM Check if there are any changes to commit
+git diff --cached --quiet
+if !errorlevel! equ 0 (
+    echo "✅ No changes detected - repository is already up to date!"
+    cd ..
+    rmdir /s /q "%TEMP_DIR%"
+    echo "📁 Local extension directory: %EXTENSION_DIR%\ (ready for Chrome testing)"
+    echo "🔗 View on GitHub: https://github.com/charithharshana/AI-Post-Robot"
+    pause
+    exit /b 0
+)
+
+REM Create commit message with timestamp and change summary
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
 set "YY=%dt:~2,2%" & set "YYYY=%dt:~0,4%" & set "MM=%dt:~4,2%" & set "DD=%dt:~6,2%"
 set "HH=%dt:~8,2%" & set "Min=%dt:~10,2%" & set "Sec=%dt:~12,2%"
 set "timestamp=%YYYY%-%MM%-%DD% %HH%:%Min%:%Sec%"
 
+echo 📝 Changes detected, creating commit...
 git commit -m "Update Chrome extension files - Auto-sync from development repository - %timestamp%"
 
-echo 🚀 Pushing to GitHub (only changed files)...
-git remote add origin "%GITHUB_REPO%"
-git push -f origin HEAD:%BRANCH%
+echo 🚀 Pushing changes to GitHub...
+git push origin %BRANCH%
 
 cd ..
 echo 🧹 Cleaning up temporary directory...

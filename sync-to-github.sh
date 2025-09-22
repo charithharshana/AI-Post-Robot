@@ -84,19 +84,44 @@ cp -r "$EXTENSION_DIR"/* "$TEMP_DIR/"
 echo "🔧 Setting up git repository..."
 cd "$TEMP_DIR"
 git init
+git remote add origin "$GITHUB_REPO"
+
+# Fetch the existing repository to compare changes
+echo "📥 Fetching existing repository for change detection..."
+git fetch origin $BRANCH 2>/dev/null || echo "   📝 No existing branch found, will create new one"
+
+# Check if branch exists and checkout
+if git ls-remote --heads origin $BRANCH | grep -q $BRANCH; then
+    echo "   📋 Existing branch found, checking for changes..."
+    git checkout -b $BRANCH origin/$BRANCH 2>/dev/null || git checkout -b $BRANCH
+else
+    echo "   🆕 Creating new branch..."
+    git checkout -b $BRANCH
+fi
+
 git add .
 
-# Create commit message with timestamp
+# Check if there are any changes to commit
+if git diff --cached --quiet; then
+    echo "✅ No changes detected - repository is already up to date!"
+    cd ..
+    rm -rf "$TEMP_DIR"
+    echo "   📁 Local extension directory: $EXTENSION_DIR/ (ready for Chrome testing)"
+    echo "   🔗 View on GitHub: https://github.com/charithharshana/AI-Post-Robot"
+    exit 0
+fi
+
+# Create commit message with timestamp and change summary
 COMMIT_MSG="Update Chrome extension files
 
 Auto-sync from development repository - $(date '+%Y-%m-%d %H:%M:%S')
 Updated extension files with latest changes from local development."
 
+echo "📝 Changes detected, creating commit..."
 git commit -m "$COMMIT_MSG"
 
-echo "🚀 Pushing to GitHub (only changed files)..."
-git remote add origin "$GITHUB_REPO"
-git push -f origin HEAD:$BRANCH
+echo "🚀 Pushing changes to GitHub..."
+git push origin $BRANCH
 
 cd ..
 echo "🧹 Cleaning up temporary directory..."
