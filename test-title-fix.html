@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Title Generation Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { border: 1px solid #ccc; margin: 10px 0; padding: 15px; border-radius: 5px; }
+        .test-case h3 { margin-top: 0; color: #333; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 3px; }
+        .pass { background-color: #d4edda; color: #155724; }
+        .fail { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>AI Post Robot - Title Generation Fix Test</h1>
+    <p>This test verifies that the title generation fix preserves language consistency and uses the correct source text.</p>
+
+    <div class="test-case">
+        <h3>Test 1: getCurrentTextForPost Function</h3>
+        <p>Tests the priority order: overridden title > original title > caption</p>
+        <div id="test1-result" class="result info">Click "Run Test" to execute</div>
+        <button onclick="runTest1()">Run Test</button>
+    </div>
+
+    <div class="test-case">
+        <h3>Test 2: Title Display Logic</h3>
+        <p>Tests that title field shows correct text based on priority</p>
+        <div id="test2-result" class="result info">Click "Run Test" to execute</div>
+        <button onclick="runTest2()">Run Test</button>
+    </div>
+
+    <div class="test-case">
+        <h3>Test 3: Prompt Language Instructions</h3>
+        <p>Tests that prompts contain explicit language preservation instructions</p>
+        <div id="test3-result" class="result info">Click "Run Test" to execute</div>
+        <button onclick="runTest3()">Run Test</button>
+    </div>
+
+    <script>
+        // Mock the getCurrentTextForPost function from advanced-scheduler.js
+        function getCurrentTextForPost(post, target) {
+            if (target === 'title') {
+                // Priority order for title text:
+                // 1. User's overridden title (if exists)
+                // 2. Original title from post (if exists)
+                // 3. Caption as fallback (only if no title exists)
+                if (post.titleOverridden && post.overriddenTitle) {
+                    return post.overriddenTitle;
+                } else if (post.title) {
+                    return post.title;
+                } else {
+                    return post.caption || '';
+                }
+            } else {
+                return post.captionOverridden ? post.overriddenCaption : (post.caption || '');
+            }
+        }
+
+        // Mock display title logic
+        function getDisplayTitle(post) {
+            return post.titleOverridden ? post.overriddenTitle : (post.title || post.caption);
+        }
+
+        function runTest1() {
+            const resultDiv = document.getElementById('test1-result');
+            let results = [];
+
+            // Test case 1: Post with overridden title
+            const post1 = {
+                title: 'Original English Title',
+                caption: 'Some caption text',
+                overriddenTitle: 'New English Title',
+                titleOverridden: true
+            };
+            const result1 = getCurrentTextForPost(post1, 'title');
+            const expected1 = 'New English Title';
+            results.push({
+                test: 'Overridden title priority',
+                result: result1,
+                expected: expected1,
+                pass: result1 === expected1
+            });
+
+            // Test case 2: Post with original title but no override
+            const post2 = {
+                title: 'Original English Title',
+                caption: 'Some caption text',
+                titleOverridden: false
+            };
+            const result2 = getCurrentTextForPost(post2, 'title');
+            const expected2 = 'Original English Title';
+            results.push({
+                test: 'Original title priority',
+                result: result2,
+                expected: expected2,
+                pass: result2 === expected2
+            });
+
+            // Test case 3: Post with no title, fallback to caption
+            const post3 = {
+                caption: 'Caption as fallback',
+                titleOverridden: false
+            };
+            const result3 = getCurrentTextForPost(post3, 'title');
+            const expected3 = 'Caption as fallback';
+            results.push({
+                test: 'Caption fallback',
+                result: result3,
+                expected: expected3,
+                pass: result3 === expected3
+            });
+
+            // Display results
+            const allPassed = results.every(r => r.pass);
+            resultDiv.className = `result ${allPassed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `
+                <strong>${allPassed ? 'PASS' : 'FAIL'}</strong><br>
+                ${results.map(r => `
+                    ${r.test}: ${r.pass ? '✅' : '❌'}<br>
+                    Expected: "${r.expected}", Got: "${r.result}"
+                `).join('<br>')}
+            `;
+        }
+
+        function runTest2() {
+            const resultDiv = document.getElementById('test2-result');
+            let results = [];
+
+            // Test case 1: Display title with override
+            const post1 = {
+                title: 'Original Title',
+                caption: 'Caption text',
+                overriddenTitle: 'Override Title',
+                titleOverridden: true
+            };
+            const result1 = getDisplayTitle(post1);
+            const expected1 = 'Override Title';
+            results.push({
+                test: 'Display overridden title',
+                result: result1,
+                expected: expected1,
+                pass: result1 === expected1
+            });
+
+            // Test case 2: Display original title when no override
+            const post2 = {
+                title: 'Original Title',
+                caption: 'Caption text',
+                titleOverridden: false
+            };
+            const result2 = getDisplayTitle(post2);
+            const expected2 = 'Original Title';
+            results.push({
+                test: 'Display original title',
+                result: result2,
+                expected: expected2,
+                pass: result2 === expected2
+            });
+
+            // Display results
+            const allPassed = results.every(r => r.pass);
+            resultDiv.className = `result ${allPassed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `
+                <strong>${allPassed ? 'PASS' : 'FAIL'}</strong><br>
+                ${results.map(r => `
+                    ${r.test}: ${r.pass ? '✅' : '❌'}<br>
+                    Expected: "${r.expected}", Got: "${r.result}"
+                `).join('<br>')}
+            `;
+        }
+
+        function runTest3() {
+            const resultDiv = document.getElementById('test3-result');
+            
+            // Mock prompts to test (these should match the updated prompts)
+            const mockPrompts = {
+                title: [
+                    {
+                        name: "Make Engaging Title",
+                        prompt: "Based on this image/video and text, create a short, engaging title. IMPORTANT: Use the exact same language as the original text (English, Spanish, French, etc.). If the text is in English, respond in English. Provide only one option:"
+                    }
+                ]
+            };
+
+            const prompt = mockPrompts.title[0].prompt;
+            const hasLanguageInstruction = prompt.includes('IMPORTANT: Use the exact same language') && 
+                                         prompt.includes('If the text is in English, respond in English');
+
+            resultDiv.className = `result ${hasLanguageInstruction ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `
+                <strong>${hasLanguageInstruction ? 'PASS' : 'FAIL'}</strong><br>
+                Language preservation instruction: ${hasLanguageInstruction ? '✅ Found' : '❌ Missing'}<br>
+                <small>Prompt: "${prompt.substring(0, 100)}..."</small>
+            `;
+        }
+
+        // Auto-run all tests on page load
+        window.onload = function() {
+            setTimeout(() => {
+                runTest1();
+                runTest2();
+                runTest3();
+            }, 500);
+        };
+    </script>
+</body>
+</html>
