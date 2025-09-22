@@ -94,10 +94,17 @@ AI-Post-Robot-master/           # Local development repository
 
 ## Development Workflow
 
-1. **Make changes** to source files in the root directory
-2. **Test locally**: `node deploy.js local` → Load in Chrome
-3. **Deploy to GitHub**: `node deploy.js github` when ready
-4. **Commit development changes** to local git as needed
+1. **Work on development branch**: `git checkout development`
+2. **Make changes** to source files in the root directory
+3. **Test locally**: `node deploy.js local` → Load in Chrome
+4. **Deploy to GitHub**: `node deploy.js github` when ready
+5. **Commit development changes**: `git add -A && git commit -m "Your changes"`
+
+### Branch Strategy
+
+- **`development` branch**: Contains all development files (recommended for daily work)
+- **`main` branch**: Kept clean, aligned with GitHub extension repository
+- **GitHub repository**: Contains only extension files (automatically managed)
 
 ## Requirements
 
