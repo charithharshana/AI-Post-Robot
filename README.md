@@ -72,7 +72,7 @@ This release marks the transition from beta to a stable, production-ready extens
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Updated)
 
 ### Installation
 
