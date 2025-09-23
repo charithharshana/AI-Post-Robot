@@ -2,6 +2,7 @@
 let savedItems = {};
 let categories = [];
 let selectedPosts = new Set();
+let lastSelectedPostId = null; // Track last selected post for shift-click range selection
 let channelsData = [];
 let currentCategory = 'all';
 let userEditedTitle = false;
@@ -296,6 +297,201 @@ function getBestQualityImageUrl(post) {
 }
 
 /**
+ * Get scheduling parameters for a post
+ * Returns the appropriate parameters for the RoboPost API
+ */
+function getSchedulingParameters(post) {
+  const params = {
+    isTextOnly: post.isTextOnly || false,
+    isVideo: post.isVideo || false
+  };
+
+  if (post.isTextOnly) {
+    return params;
+  }
+
+  // 1. For PC uploads and AI images - use storageId (preferred by API)
+  if (post.storageId) {
+    params.storageId = post.storageId;
+    params.isVideo = post.isVideo || false;
+    console.log(`📸 Using storageId for scheduling:`, post.storageId);
+    return params;
+  }
+
+  // 2. For social media captures - use original URL if available
+  if (post.originalUrl) {
+    params.imageUrl = post.originalUrl;
+    console.log(`📸 Using originalUrl for scheduling:`, post.originalUrl);
+    return params;
+  }
+
+  // 3. For AI images with original data URL - use it
+  if (post.originalDataUrl) {
+    params.imageUrl = post.originalDataUrl;
+    console.log(`📸 Using originalDataUrl for scheduling`);
+    return params;
+  }
+
+  // 4. For videos - use video URL
+  if (post.videoUrl) {
+    params.imageUrl = post.videoUrl;
+    params.isVideo = true;
+    console.log(`📸 Using videoUrl for scheduling:`, post.videoUrl);
+    return params;
+  }
+
+  // 5. Fallback to compressed preview
+  if (post.imageUrl) {
+    params.imageUrl = post.imageUrl;
+    console.warn(`⚠️ Using compressed preview for scheduling:`, post.imageUrl);
+    return params;
+  }
+
+  console.error(`❌ No valid image source found for post:`, post.id);
+  return params;
+}
+
+/**
+ * Validate if a URL is accessible for scheduling
+ */
+async function validateImageUrl(url, timeout = 5000) {
+  if (!url) {
+    console.warn('⚠️ URL validation failed: Empty URL provided');
+    return false;
+  }
+
+  console.log(`🔍 Validating URL: ${url.substring(0, 100)}${url.length > 100 ? '...' : ''}`);
+
+  // Data URLs are always valid
+  if (url.startsWith('data:')) {
+    console.log('✅ Data URL detected - validation passed');
+    return true;
+  }
+
+  // For RoboPost storage URLs, assume they're valid if we have a storageId
+  if (url.includes('api.robopost.app/stored_objects/')) {
+    console.log('✅ RoboPost storage URL detected - validation passed');
+    return true;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn(`⏰ URL validation timeout (${timeout}ms) for: ${url}`);
+      controller.abort();
+    }, timeout);
+
+    const response = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+      mode: 'no-cors' // Allow cross-origin requests
+    });
+
+    clearTimeout(timeoutId);
+    console.log(`✅ URL validation successful for: ${url.substring(0, 50)}...`);
+    return true; // If we get here, the URL is accessible
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error(`❌ URL validation timeout for: ${url}`);
+    } else {
+      console.error(`❌ URL validation failed for: ${url}`, {
+        error: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+    }
+    return false;
+  }
+}
+
+/**
+ * Enhanced error logging for scheduling issues
+ */
+function logSchedulingError(context, error, postData = null) {
+  const errorInfo = {
+    context: context,
+    timestamp: new Date().toISOString(),
+    error: {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    }
+  };
+
+  if (postData) {
+    errorInfo.postData = {
+      id: postData.id,
+      hasStorageId: !!postData.storageId,
+      hasOriginalUrl: !!postData.originalUrl,
+      hasOriginalDataUrl: !!postData.originalDataUrl,
+      hasImageUrl: !!postData.imageUrl,
+      hasVideoUrl: !!postData.videoUrl,
+      isTextOnly: postData.isTextOnly,
+      isVideo: postData.isVideo
+    };
+  }
+
+  console.error(`🚨 Scheduling Error [${context}]:`, errorInfo);
+
+  // Store error for potential debugging
+  if (!window.schedulingErrors) {
+    window.schedulingErrors = [];
+  }
+  window.schedulingErrors.push(errorInfo);
+
+  // Keep only last 10 errors to prevent memory issues
+  if (window.schedulingErrors.length > 10) {
+    window.schedulingErrors = window.schedulingErrors.slice(-10);
+  }
+}
+
+/**
+ * Debug function to help users troubleshoot scheduling issues
+ * Can be called from browser console: debugSchedulingIssues()
+ */
+window.debugSchedulingIssues = function() {
+  console.log('🔍 AI Post Robot Scheduling Debug Information');
+  console.log('='.repeat(50));
+
+  // Show recent errors
+  if (window.schedulingErrors && window.schedulingErrors.length > 0) {
+    console.log('📋 Recent Scheduling Errors:');
+    window.schedulingErrors.forEach((error, index) => {
+      console.log(`${index + 1}. [${error.timestamp}] ${error.context}:`, error);
+    });
+  } else {
+    console.log('✅ No recent scheduling errors found');
+  }
+
+  // Show selected posts info
+  if (selectedPosts.size > 0) {
+    console.log('\n📋 Currently Selected Posts:');
+    Array.from(selectedPosts).forEach((postId, index) => {
+      const post = window.getPostById(postId);
+      if (post) {
+        const params = getSchedulingParameters(post);
+        console.log(`${index + 1}. Post ${postId}:`, {
+          hasStorageId: !!post.storageId,
+          hasOriginalUrl: !!post.originalUrl,
+          hasOriginalDataUrl: !!post.originalDataUrl,
+          hasImageUrl: !!post.imageUrl,
+          isTextOnly: post.isTextOnly,
+          schedulingParams: params
+        });
+      }
+    });
+  } else {
+    console.log('\n📋 No posts currently selected');
+  }
+
+  console.log('\n💡 Tips:');
+  console.log('- Check if image URLs are accessible');
+  console.log('- Verify RoboPost API connection');
+  console.log('- Ensure posts have valid image sources');
+  console.log('- Try scheduling individual posts instead of albums');
+};
+
+/**
  * Get image metadata for display
  */
 function getImageMetadata(post) {
@@ -448,8 +644,16 @@ function loadPosts() {
 }
 
 function togglePostSelection(postId, cardElement, event) {
+  // Handle shift-click range selection
+  if (event.shiftKey && lastSelectedPostId && lastSelectedPostId !== postId) {
+    selectPostRange(lastSelectedPostId, postId);
+    updateSelectedPostsInfo();
+    updateStats();
+    return;
+  }
+
   // If Ctrl key is not pressed, clear all previous selections first
-  if (!event.ctrlKey && !event.metaKey) {
+  if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
     // Clear all previous selections
     selectedPosts.forEach(selectedId => {
       const selectedCard = document.querySelector(`[data-post-id="${selectedId}"]`);
@@ -464,13 +668,63 @@ function togglePostSelection(postId, cardElement, event) {
   if (selectedPosts.has(postId)) {
     selectedPosts.delete(postId);
     cardElement.classList.remove('selected');
+    // Don't update lastSelectedPostId when deselecting
   } else {
     selectedPosts.add(postId);
     cardElement.classList.add('selected');
+    lastSelectedPostId = postId; // Update last selected post
   }
 
   updateSelectedPostsInfo();
   updateStats();
+}
+
+/**
+ * Select a range of posts between two post IDs
+ */
+function selectPostRange(startPostId, endPostId) {
+  const allCards = Array.from(document.querySelectorAll('.post-card'));
+
+  // Find the indices of start and end posts
+  let startIndex = -1;
+  let endIndex = -1;
+
+  for (let i = 0; i < allCards.length; i++) {
+    const card = allCards[i];
+    const cardPostId = card.dataset.postId;
+
+    if (cardPostId === startPostId) {
+      startIndex = i;
+    }
+    if (cardPostId === endPostId) {
+      endIndex = i;
+    }
+  }
+
+  // If both indices found, select the range
+  if (startIndex !== -1 && endIndex !== -1) {
+    // Ensure startIndex is less than endIndex
+    const minIndex = Math.min(startIndex, endIndex);
+    const maxIndex = Math.max(startIndex, endIndex);
+
+    // Select all posts in the range
+    for (let i = minIndex; i <= maxIndex; i++) {
+      const card = allCards[i];
+      const cardPostId = card.dataset.postId;
+
+      if (!selectedPosts.has(cardPostId)) {
+        selectedPosts.add(cardPostId);
+        card.classList.add('selected');
+      }
+    }
+
+    // Update last selected to the end post
+    lastSelectedPostId = endPostId;
+
+    console.log(`📋 Selected range: ${maxIndex - minIndex + 1} posts from index ${minIndex} to ${maxIndex}`);
+  } else {
+    console.warn('⚠️ Could not find start or end post for range selection');
+  }
 }
 
 function updateSelectedPostsInfo() {
@@ -1529,6 +1783,7 @@ function selectAllPosts() {
 
 function clearSelection() {
   selectedPosts.clear();
+  lastSelectedPostId = null; // Reset last selected post for shift-click
   document.querySelectorAll('.post-card').forEach(card => {
     card.classList.remove('selected');
   });
@@ -2577,33 +2832,69 @@ async function publishNow() {
 
     if (publishType === 'album' && selectedPosts.size > 1) {
       const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
-      // Use high-quality images: storageId (PC uploads), originalUrl (social media), or imageUrl (fallback)
-      const imageUrls = posts.map(post => {
-        if (post.storageId) {
-          // For PC uploads, use RoboPost storage URL for original quality
-          return `https://api.robopost.app/stored_objects/${post.storageId}/download`;
-        } else if (post.originalUrl) {
-          // For social media captures, use original URL
-          return post.originalUrl;
+
+      // Get proper scheduling parameters for each post
+      const imageUrls = [];
+      const storageIds = [];
+
+      for (const post of posts) {
+        const params = getSchedulingParameters(post);
+
+        if (params.storageId) {
+          storageIds.push(params.storageId);
+          imageUrls.push(null);
+        } else if (params.imageUrl) {
+          const isValid = await validateImageUrl(params.imageUrl);
+          if (isValid) {
+            imageUrls.push(params.imageUrl);
+            storageIds.push(null);
+          } else {
+            console.warn(`⚠️ Original URL failed validation, using fallback for post:`, post.id);
+            const fallbackUrl = post.imageUrl;
+            const isFallbackValid = await validateImageUrl(fallbackUrl);
+
+            if (isFallbackValid) {
+              imageUrls.push(fallbackUrl);
+              storageIds.push(null);
+              console.log(`✅ Using fallback URL for publish now post: ${post.id}`);
+            } else {
+              const error = new Error(`Failed to find valid image URL for post: ${post.id}`);
+              logSchedulingError('Publish Now URL Validation', error, post);
+              throw error;
+            }
+          }
         } else {
-          // Fallback to compressed preview (should be rare)
-          console.warn('⚠️ Using compressed preview for album post:', post.id);
-          return post.imageUrl;
+          const error = new Error(`No valid image source found for post: ${post.id}`);
+          logSchedulingError('Publish Now Image Source', error, post);
+          throw error;
         }
-      });
+      }
 
       // DEBUG: Get platform settings and log them
       const platformSettings = getPlatformSpecificSettings();
       console.log('🔍 DEBUG: Publish now platform settings generated:', JSON.stringify(platformSettings, null, 2));
 
       const publishOptions = {
-        imageUrls: imageUrls,
         caption: caption,
         channelIds: selectedChannels,
         scheduleAt: publishTime,
         title: title,
-        platformSettings: platformSettings // Explicitly pass as platformSettings
+        platformSettings: platformSettings
       };
+
+      // Add either imageUrls or storageIds based on what we have
+      const validImageUrls = imageUrls.filter(url => url !== null);
+      const validStorageIds = storageIds.filter(id => id !== null);
+
+      if (validStorageIds.length > 0 && validStorageIds.length === posts.length) {
+        publishOptions.storageIds = validStorageIds;
+        console.log('🔍 Using storageIds for publish now:', validStorageIds);
+      } else if (validImageUrls.length > 0) {
+        publishOptions.imageUrls = validImageUrls;
+        console.log('🔍 Using imageUrls for publish now:', validImageUrls.length, 'URLs');
+      } else {
+        throw new Error('No valid image sources found for album');
+      }
 
       console.log('🔍 DEBUG: Complete publish options:', JSON.stringify(publishOptions, null, 2));
 
@@ -2629,34 +2920,76 @@ async function publishNow() {
 
 async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
   const posts = Array.from(selectedPosts).map(postId => window.getPostById(postId));
-  // Use high-quality images: storageId (PC uploads), originalUrl (social media), or imageUrl (fallback)
-  const imageUrls = posts.map(post => {
-    if (post.storageId) {
-      // For PC uploads, use RoboPost storage URL for original quality
-      return `https://api.robopost.app/stored_objects/${post.storageId}/download`;
-    } else if (post.originalUrl) {
-      // For social media captures, use original URL
-      return post.originalUrl;
+
+  // Get proper scheduling parameters for each post
+  const imageUrls = [];
+  const storageIds = [];
+
+  for (const post of posts) {
+    const params = getSchedulingParameters(post);
+
+    if (params.storageId) {
+      // Use storageId for RoboPost API (preferred method)
+      storageIds.push(params.storageId);
+      imageUrls.push(null); // No URL needed when using storageId
+    } else if (params.imageUrl) {
+      // Validate URL before using it
+      const isValid = await validateImageUrl(params.imageUrl);
+      if (isValid) {
+        imageUrls.push(params.imageUrl);
+        storageIds.push(null);
+      } else {
+        // Fallback to compressed preview if original URL fails
+        console.warn(`⚠️ Original URL failed validation, using fallback for post:`, post.id);
+        const fallbackUrl = post.imageUrl;
+        const isFallbackValid = await validateImageUrl(fallbackUrl);
+
+        if (isFallbackValid) {
+          imageUrls.push(fallbackUrl);
+          storageIds.push(null);
+          console.log(`✅ Using fallback URL for album post: ${post.id}`);
+        } else {
+          const error = new Error(`Failed to find valid image URL for post: ${post.id}`);
+          logSchedulingError('Album URL Validation', error, post);
+          throw error;
+        }
+      }
     } else {
-      // Fallback to compressed preview (should be rare)
-      console.warn('⚠️ Using compressed preview for album post:', post.id);
-      return post.imageUrl;
+      const error = new Error(`No valid image source found for post: ${post.id}`);
+      logSchedulingError('Album Image Source', error, post);
+      throw error;
     }
-  });
+  }
 
   try {
     // DEBUG: Get platform settings and log them
     const platformSettings = getPlatformSpecificSettings();
     console.log('🔍 DEBUG: Album platform settings generated:', JSON.stringify(platformSettings, null, 2));
 
+    // Build album options with proper parameters
     const albumOptions = {
-      imageUrls: imageUrls,
       caption: caption,
       channelIds: channels,
       scheduleAt: new Date(scheduleDateTime).toISOString(),
       title: title,
-      platformSettings: platformSettings // Explicitly pass as platformSettings
+      platformSettings: platformSettings
     };
+
+    // Add either imageUrls or storageIds based on what we have
+    const validImageUrls = imageUrls.filter(url => url !== null);
+    const validStorageIds = storageIds.filter(id => id !== null);
+
+    if (validStorageIds.length > 0 && validStorageIds.length === posts.length) {
+      // All posts have storageIds - use them (preferred)
+      albumOptions.storageIds = validStorageIds;
+      console.log('🔍 Using storageIds for album:', validStorageIds);
+    } else if (validImageUrls.length > 0) {
+      // Use imageUrls as fallback
+      albumOptions.imageUrls = validImageUrls;
+      console.log('🔍 Using imageUrls for album:', validImageUrls.length, 'URLs');
+    } else {
+      throw new Error('No valid image sources found for album');
+    }
 
     console.log('🔍 DEBUG: Complete album options:', JSON.stringify(albumOptions, null, 2));
 
@@ -2666,6 +2999,11 @@ async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
     return result;
 
   } catch (error) {
+    logSchedulingError('Album Scheduling', error, {
+      postsCount: posts.length,
+      hasStorageIds: validStorageIds.length > 0,
+      hasImageUrls: validImageUrls.length > 0
+    });
     console.error('Failed to schedule album:', error);
     throw error;
   }
@@ -2752,21 +3090,34 @@ async function scheduleIndividualPosts(channels, scheduleDateTime, interval, cap
         platformSettings: platformSettings
       };
 
-      // Set image source - prioritize high-quality options
+      // Get proper scheduling parameters with validation
       if (!post.isTextOnly) {
-        if (post.storageId) {
-          // Use storageId for original quality (PC uploads, AI images)
-          scheduleOptions.storageId = post.storageId;
-          scheduleOptions.isVideo = post.isVideo;
-          console.log(`📸 Using original quality via storage_id for post ${i + 1}:`, post.storageId);
-        } else if (post.originalUrl) {
-          // Use original URL for social media captures
-          scheduleOptions.imageUrl = post.originalUrl;
-          console.log(`📸 Using original URL for post ${i + 1}:`, post.originalUrl);
-        } else {
-          // Fallback to compressed preview
-          scheduleOptions.imageUrl = post.imageUrl;
-          console.warn(`⚠️ Using compressed preview for post ${i + 1}:`, post.imageUrl);
+        const params = getSchedulingParameters(post);
+
+        if (params.storageId) {
+          scheduleOptions.storageId = params.storageId;
+          scheduleOptions.isVideo = params.isVideo;
+          console.log(`📸 Using storageId for post ${i + 1}:`, params.storageId);
+        } else if (params.imageUrl) {
+          // Validate URL before using it
+          const isValid = await validateImageUrl(params.imageUrl);
+          if (isValid) {
+            scheduleOptions.imageUrl = params.imageUrl;
+            scheduleOptions.isVideo = params.isVideo;
+            console.log(`📸 Using validated imageUrl for post ${i + 1}`);
+          } else {
+            // Try fallback to compressed preview
+            console.warn(`⚠️ Original URL failed validation for post ${i + 1}, trying fallback`);
+            const fallbackUrl = post.imageUrl;
+            const isFallbackValid = await validateImageUrl(fallbackUrl);
+
+            if (isFallbackValid) {
+              scheduleOptions.imageUrl = fallbackUrl;
+              console.log(`📸 Using fallback imageUrl for post ${i + 1}`);
+            } else {
+              throw new Error(`No valid image URL found for post ${i + 1}: ${post.id}`);
+            }
+          }
         }
       }
 
