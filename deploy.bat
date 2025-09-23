@@ -3,8 +3,10 @@ setlocal enabledelayedexpansion
 REM AI Post Robot - Extension Deployment Script
 REM Copies extension files to distribution directory and manages git repositories
 
+echo.
 echo 🤖 AI Post Robot - Extension Deployment
 echo ========================================
+echo.
 
 REM Configuration
 set "EXTENSION_SOURCE=extension"
@@ -16,6 +18,7 @@ REM Check if extension source directory exists
 if not exist "%EXTENSION_SOURCE%" (
     echo ❌ Error: Extension source directory '%EXTENSION_SOURCE%' not found
     echo Please run this script from the AI-Post-Robot-master directory
+    echo.
     pause
     exit /b 1
 )
@@ -27,6 +30,7 @@ if not exist "%EXTENSION_DIST%" (
     if not exist "%EXTENSION_DIST%" (
         echo ❌ Error: Failed to create distribution directory
         echo Please ensure the parent directory exists: ..\extension\
+        echo.
         pause
         exit /b 1
     )
@@ -38,9 +42,10 @@ echo Destination: %EXTENSION_DIST%
 echo.
 
 REM Copy all files and directories from extension source to distribution
-xcopy "%EXTENSION_SOURCE%\*" "%EXTENSION_DIST%\" /E /Y /I >nul 2>&1
+xcopy "%EXTENSION_SOURCE%\*" "%EXTENSION_DIST%\" /E /Y /I
 if %errorlevel% neq 0 (
     echo ❌ Error: Failed to copy extension files
+    echo.
     pause
     exit /b 1
 )
@@ -49,52 +54,46 @@ echo ✅ Extension files copied successfully!
 echo.
 
 REM Navigate to distribution directory for git operations
+echo 📡 Managing git repository in distribution directory...
 pushd "%EXTENSION_DIST%"
 
 REM Check if this is a git repository
 git status >nul 2>&1
 if %errorlevel% neq 0 (
-    echo 🔧 Initializing git repository in distribution directory...
+    echo 🔧 Initializing git repository...
     git init
     git remote add origin %DIST_REPO_URL%
     echo ✅ Git repository initialized
 ) else (
-    echo 📡 Git repository already exists, checking remote...
+    echo 📡 Git repository exists, checking remote...
     git remote get-url origin >nul 2>&1
     if %errorlevel% neq 0 (
         git remote add origin %DIST_REPO_URL%
         echo ✅ Remote origin added
     ) else (
-        for /f "tokens=*" %%i in ('git remote get-url origin') do set "current_remote=%%i"
-        if not "!current_remote!"=="%DIST_REPO_URL%" (
-            git remote set-url origin %DIST_REPO_URL%
-            echo ✅ Remote origin updated
-        )
+        echo ✅ Remote origin already configured
     )
 )
 
 REM Add and commit changes
-echo 📝 Committing changes to distribution repository...
+echo 📝 Adding and committing changes...
 git add .
-git status --porcelain >nul 2>&1
-if %errorlevel% equ 0 (
-    for /f %%i in ('git status --porcelain ^| find /c /v ""') do set "changes=%%i"
-    if !changes! gtr 0 (
-        git commit -m "Update extension files - %date% %time%"
-        echo ✅ Changes committed
 
-        echo 📤 Pushing to distribution repository...
-        git push -u origin main
-        if %errorlevel% equ 0 (
-            echo ✅ Successfully pushed to distribution repository!
-        ) else (
-            echo ⚠️  Push failed - you may need to pull first or resolve conflicts
-        )
+REM Check if there are changes to commit
+git diff --cached --quiet
+if %errorlevel% neq 0 (
+    git commit -m "Update extension files - %date% %time%"
+    echo ✅ Changes committed
+
+    echo 📤 Pushing to distribution repository...
+    git push -u origin main
+    if %errorlevel% equ 0 (
+        echo ✅ Successfully pushed to distribution repository!
     ) else (
-        echo ℹ️  No changes to commit
+        echo ⚠️  Push may have failed - check network connection
     )
 ) else (
-    echo ❌ Error checking git status
+    echo ℹ️  No changes to commit
 )
 
 popd
@@ -104,5 +103,5 @@ echo 🎉 Deployment process completed!
 echo 📁 Extension files are ready in: %EXTENSION_DIST%
 echo 📡 Distribution repository: %DIST_REPO_URL%
 echo.
-
-pause
+echo Press any key to exit...
+pause >nul
