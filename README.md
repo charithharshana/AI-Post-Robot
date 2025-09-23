@@ -191,7 +191,7 @@ Contributions are welcome! Please:
 
 ## 📈 Version History
 
-### v1.0.0 (Current) - Official Release 🎉
+### v1.0.0 (Current) - Official Release🎉
 **Complete Feature Set:**
 - **Smart Content Capture**: Auto-detection from Facebook and Pinterest with manual selection support
 - **AI Image+ Generator**: Revolutionary AI image creation using Google Gemini native image model
