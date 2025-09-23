@@ -1,94 +1,107 @@
 @echo off
-REM AI Post Robot - Windows Deployment Script
-REM Interactive wrapper for the Node.js deployment script
+REM AI Post Robot - Extension Deployment Script
+REM Copies extension files to distribution directory and manages git repositories
 
-echo 🤖 AI Post Robot - Windows Deployment
-echo =====================================
+echo 🤖 AI Post Robot - Extension Deployment
+echo ========================================
 
-REM Check if Node.js is available
-node --version >nul 2>&1
+REM Configuration
+set "EXTENSION_SOURCE=extension"
+set "EXTENSION_DIST=..\extension\extension"
+set "DEV_REPO_URL=https://github.com/charithharshana/AI-Post-Robot-Development.git"
+set "DIST_REPO_URL=https://github.com/charithharshana/AI-Post-Robot.git"
+
+REM Check if extension source directory exists
+if not exist "%EXTENSION_SOURCE%" (
+    echo ❌ Error: Extension source directory '%EXTENSION_SOURCE%' not found
+    echo Please run this script from the AI-Post-Robot-master directory
+    pause
+    exit /b 1
+)
+
+REM Create distribution directory if it doesn't exist
+if not exist "%EXTENSION_DIST%" (
+    echo 📁 Creating distribution directory: %EXTENSION_DIST%
+    mkdir "%EXTENSION_DIST%" 2>nul
+    if not exist "%EXTENSION_DIST%" (
+        echo ❌ Error: Failed to create distribution directory
+        echo Please ensure the parent directory exists: ..\extension\
+        pause
+        exit /b 1
+    )
+)
+
+echo 📋 Copying extension files...
+echo Source: %EXTENSION_SOURCE%
+echo Destination: %EXTENSION_DIST%
+echo.
+
+REM Copy all files and directories from extension source to distribution
+xcopy "%EXTENSION_SOURCE%\*" "%EXTENSION_DIST%\" /E /Y /I >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ❌ Error: Node.js is not installed or not in PATH
-    echo Please install Node.js from https://nodejs.org/
+    echo ❌ Error: Failed to copy extension files
     pause
     exit /b 1
 )
 
-REM Check if deploy.js exists
-if not exist "deploy.js" (
-    echo ❌ Error: deploy.js not found
-    echo Please run this script from the project root directory
-    pause
-    exit /b 1
-)
-
-REM If argument provided, use it directly
-if not "%1"=="" (
-    echo 🚀 Running deployment with argument: %1
-    node deploy.js %1
-    goto :end
-)
-
-REM Interactive deployment menu
-echo.
-echo 📋 Available Deployment Options:
-echo ================================
-echo [1] Local Deployment (node deploy.js local)
-echo [2] GitHub Deployment (node deploy.js github)
-echo [3] Show Help (node deploy.js)
-echo [4] Exit
+echo ✅ Extension files copied successfully!
 echo.
 
-:menu
-set /p choice="Please select an option (1-4): "
+REM Navigate to distribution directory for git operations
+pushd "%EXTENSION_DIST%"
 
-if "%choice%"=="1" (
-    echo.
-    echo 🏠 Starting Local Deployment...
-    echo ===============================
-    node deploy.js local
-    if %errorlevel% equ 0 (
-        echo ✅ Local deployment completed successfully!
+REM Check if this is a git repository
+git status >nul 2>&1
+if %errorlevel% neq 0 (
+    echo 🔧 Initializing git repository in distribution directory...
+    git init
+    git remote add origin %DIST_REPO_URL%
+    echo ✅ Git repository initialized
+) else (
+    echo 📡 Git repository already exists, checking remote...
+    git remote get-url origin >nul 2>&1
+    if %errorlevel% neq 0 (
+        git remote add origin %DIST_REPO_URL%
+        echo ✅ Remote origin added
     ) else (
-        echo ❌ Local deployment failed with error code %errorlevel%
+        for /f "tokens=*" %%i in ('git remote get-url origin') do set "current_remote=%%i"
+        if not "!current_remote!"=="%DIST_REPO_URL%" (
+            git remote set-url origin %DIST_REPO_URL%
+            echo ✅ Remote origin updated
+        )
     )
-    goto :end
 )
 
-if "%choice%"=="2" (
-    echo.
-    echo 🌐 Starting GitHub Deployment...
-    echo ================================
-    node deploy.js github
-    if %errorlevel% equ 0 (
-        echo ✅ GitHub deployment completed successfully!
+REM Add and commit changes
+echo 📝 Committing changes to distribution repository...
+git add .
+git status --porcelain >nul 2>&1
+if %errorlevel% equ 0 (
+    for /f %%i in ('git status --porcelain ^| find /c /v ""') do set "changes=%%i"
+    if !changes! gtr 0 (
+        git commit -m "Update extension files - %date% %time%"
+        echo ✅ Changes committed
+
+        echo 📤 Pushing to distribution repository...
+        git push -u origin main
+        if %errorlevel% equ 0 (
+            echo ✅ Successfully pushed to distribution repository!
+        ) else (
+            echo ⚠️  Push failed - you may need to pull first or resolve conflicts
+        )
     ) else (
-        echo ❌ GitHub deployment failed with error code %errorlevel%
+        echo ℹ️  No changes to commit
     )
-    goto :end
+) else (
+    echo ❌ Error checking git status
 )
 
-if "%choice%"=="3" (
-    echo.
-    echo 📖 Showing Deployment Help...
-    echo =============================
-    node deploy.js
-    echo.
-    echo Press any key to return to menu...
-    pause >nul
-    goto :menu
-)
+popd
 
-if "%choice%"=="4" (
-    echo 👋 Goodbye!
-    exit /b 0
-)
-
-echo ❌ Invalid choice. Please select 1, 2, 3, or 4.
 echo.
-goto :menu
-
-:end
+echo 🎉 Deployment process completed!
+echo 📁 Extension files are ready in: %EXTENSION_DIST%
+echo 📡 Distribution repository: %DIST_REPO_URL%
 echo.
-echo 🏁 Deployment process finished.
+
 pause

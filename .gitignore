@@ -1,19 +1,70 @@
-# Ignore specific files
+# AI Post Robot - Development Repository .gitignore
+# This repository contains only development files and source code
+# Extension distribution files are handled separately
+
+# Temporary and development files
 code.txt
-
-# Ignore log files
 *.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
 
-# Ignore the docs/robopost_scheduler_complete.py file
-docs/robopost_scheduler_complete.py
-
-# Ignore prebuilt-plugin directory (contains source code and build files)
-image-editor-module/prebuilt-plugin/
-
-# Ignore development and documentation files
-docs/api more.txt
-PLATFORM_SETTINGS_IMPLEMENTATION.md
-
-# Ignore VS Code and editor settings
+# IDE and editor settings
 .vscode/
 .zencoder/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js dependencies (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development documentation and notes
+docs/api more.txt
+docs/robopost_scheduler_complete.py
+PLATFORM_SETTINGS_IMPLEMENTATION.md
+
+# Build and deployment artifacts
+dist/
+build/
+*.zip
+*.crx
+*.pem
+
+# Extension prebuilt plugins and assets
+extension/image-editor-module/prebuilt-plugin/
+extension/image-editor-module/assets/temp/
+
+# Test files and temporary development files
+test/
+tests/
+*.test.js
+*.spec.js
+
+# Environment and configuration files
+.env
+.env.local
+.env.development
+.env.production
+config.local.js
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+
