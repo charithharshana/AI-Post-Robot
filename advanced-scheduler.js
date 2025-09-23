@@ -9,6 +9,57 @@ let userEditedCaption = false;
 let showTextOnlyFilter = false;
 let channelPlatformMappings = {};
 
+// Utility function to create a safe ResizeObserver that handles errors
+function createSafeResizeObserver(callback) {
+  if (!window.ResizeObserver) {
+    return null;
+  }
+
+  const safeCallback = (entries, observer) => {
+    try {
+      // Use requestAnimationFrame to avoid infinite loops
+      requestAnimationFrame(() => {
+        try {
+          callback(entries, observer);
+        } catch (error) {
+          // Silently handle ResizeObserver errors
+          if (!error.message || !error.message.includes('ResizeObserver loop')) {
+            console.warn('ResizeObserver callback error:', error);
+          }
+        }
+      });
+    } catch (error) {
+      // Silently handle ResizeObserver errors
+      if (!error.message || !error.message.includes('ResizeObserver loop')) {
+        console.warn('ResizeObserver error:', error);
+      }
+    }
+  };
+
+  return new ResizeObserver(safeCallback);
+}
+
+// Global error handler for ResizeObserver errors
+if (typeof window !== 'undefined') {
+  // Suppress ResizeObserver loop errors in console
+  const originalConsoleError = console.error;
+  console.error = function(...args) {
+    if (args.length > 0 && typeof args[0] === 'string' &&
+        args[0].includes('ResizeObserver loop completed with undelivered notifications')) {
+      return; // Silently ignore these harmless errors
+    }
+    originalConsoleError.apply(console, args);
+  };
+
+  // Handle window error events
+  window.addEventListener('error', function(event) {
+    if (event.message && event.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+      event.preventDefault();
+      return false;
+    }
+  });
+}
+
 // Image Editor Integration
 let imageEditorIntegration = null;
 
@@ -216,6 +267,35 @@ function getImageDimensions(dataUrl) {
 }
 
 /**
+ * Get the best quality image URL for display
+ * Prioritizes original quality over compressed thumbnails
+ */
+function getBestQualityImageUrl(post) {
+  // 1. For PC uploads - use RoboPost storage URL for original quality
+  if (post.storageId) {
+    return `https://api.robopost.app/stored_objects/${post.storageId}/download`;
+  }
+
+  // 2. For AI images - use original data URL if available
+  if (post.originalDataUrl) {
+    return post.originalDataUrl;
+  }
+
+  // 3. For social media captures - use original URL
+  if (post.originalUrl) {
+    return post.originalUrl;
+  }
+
+  // 4. For videos - use video URL
+  if (post.videoUrl) {
+    return post.videoUrl;
+  }
+
+  // 5. Fallback to compressed preview (imageUrl)
+  return post.imageUrl;
+}
+
+/**
  * Get image metadata for display
  */
 function getImageMetadata(post) {
@@ -339,9 +419,11 @@ function loadPosts() {
         </div>
       `;
     } else {
+      // Use best quality image URL instead of compressed thumbnail
+      const bestImageUrl = getBestQualityImageUrl(post);
       html += `
         <div class="post-card ${isSelected ? 'selected' : ''}" data-post-id="${postIdentifier}">
-          <img src="${post.imageUrl}" alt="Post image" class="post-image" onerror="this.style.display='none'">
+          <img src="${bestImageUrl}" alt="Post image" class="post-image" onerror="this.style.display='none'">
           <div class="post-content">
             <div class="post-caption">${truncatedCaption}</div>
             <div class="post-meta">${post.category}</div>
@@ -441,7 +523,9 @@ function updateSelectedPostsInfo() {
       if (count < 6) { // Show max 6 thumbnails
         const post = window.getPostById(postId);
         if (post) {
-          html += `<img src="${post.imageUrl}" alt="Thumb" class="album-thumb">`;
+          // Use best quality image URL for album preview thumbnails
+          const bestImageUrl = getBestQualityImageUrl(post);
+          html += `<img src="${bestImageUrl}" alt="Thumb" class="album-thumb">`;
         }
       }
       count++;

@@ -1745,6 +1745,7 @@ class AIImageEditorModule {
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
+        line-clamp: 2; /* Standard property for cross-browser compatibility */
         overflow: hidden;
         text-overflow: ellipsis;
       }
