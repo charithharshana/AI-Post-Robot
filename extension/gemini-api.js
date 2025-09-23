@@ -24,7 +24,7 @@ class GeminiAPI {
           this.apiKeys = result.geminiApiKeys.split('\n').map(key => key.trim()).filter(key => key);
         }
         this.model = result.geminiModel || 'gemini-2.5-flash-lite-preview-06-17';
-        this.imageModel = result.geminiImageModel || 'gemini-2.0-flash-preview-image-generation';
+        this.imageModel = result.geminiImageModel || 'gemini-2.5-flash-image-preview';
         resolve(this.apiKeys.length > 0);
       });
     });

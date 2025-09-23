@@ -4748,16 +4748,34 @@ async function openImageEditor() {
   // Get the first selected post ID (which should be in category_index format)
   const selectedPostId = Array.from(selectedPosts)[0];
 
+  // Determine the best quality image URL to use for editing
+  let editImageUrl;
+  if (post.storageId) {
+    // For PC uploads, use RoboPost storage URL for original quality
+    editImageUrl = `https://api.robopost.app/stored_objects/${post.storageId}/download`;
+    console.log('🔄 Using original quality image via storage_id for editing:', post.storageId);
+  } else if (post.originalUrl) {
+    // For social media captures, use original URL
+    editImageUrl = post.originalUrl;
+    console.log('🔄 Using original URL for editing:', post.originalUrl);
+  } else {
+    // Fallback to compressed preview (should be rare)
+    editImageUrl = post.imageUrl;
+    console.warn('⚠️ Using compressed preview for editing (no original available):', post.imageUrl);
+  }
+
   try {
     console.log('🔄 Opening editor for post:', {
       selectedPostId: selectedPostId,
       postId: post.id,
-      imageUrl: post.imageUrl
+      editImageUrl: editImageUrl,
+      hasStorageId: !!post.storageId,
+      hasOriginalUrl: !!post.originalUrl
     });
 
     await imageEditorIntegration.openEditor(
       selectedPostId, // Use the selected post ID (category_index format)
-      post.imageUrl,
+      editImageUrl, // Use the original quality image
       async (postId, editedImageDataUrl) => {
         // Handle saving the edited image
         await handleEditedImageSave(postId, editedImageDataUrl);
