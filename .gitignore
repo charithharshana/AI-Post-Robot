@@ -1,14 +1,14 @@
-# AI Post Robot - Development Repository .gitignore
-# This repository contains only development files and source code
-# Extension distribution files are handled separately
+# AI Post Robot Chrome Extension - Clean Repository
+# This repository contains only essential Chrome extension files
 
-# Temporary and development files
-code.txt
+# Development and temporary files
 *.log
 *.tmp
 *.temp
-.DS_Store
-Thumbs.db
+code.txt
+*.bak
+*.backup
+*~
 
 # IDE and editor settings
 .vscode/
@@ -16,18 +16,14 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-*~
 
 # Node.js dependencies (if any)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Development documentation and notes
-docs/api more.txt
-docs/robopost_scheduler_complete.py
-PLATFORM_SETTINGS_IMPLEMENTATION.md
+package-lock.json
+yarn.lock
 
 # Build and deployment artifacts
 dist/
@@ -36,9 +32,16 @@ build/
 *.crx
 *.pem
 
-# Extension prebuilt plugins and assets
-extension/image-editor-module/prebuilt-plugin/
-extension/image-editor-module/assets/temp/
+# Development documentation and notes
+docs/
+DEPLOYMENT.md
+RELEASE_NOTES.md
+USER_GUIDE.md
+deploy.bat
+deploy.js
+deploy.sh
+DEVELOPMENT_WORKFLOW.md
+PLATFORM_SETTINGS_IMPLEMENTATION.md
 
 # Test files and temporary development files
 test/
@@ -53,10 +56,9 @@ tests/
 .env.production
 config.local.js
 
-# Backup files
-*.bak
-*.backup
-*~
+# Image editor temporary assets
+image-editor-module/assets/temp/
+image-editor-module/prebuilt-plugin/
 
 # OS generated files
 .DS_Store
