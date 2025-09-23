@@ -2404,8 +2404,8 @@ class AIImageEditorModule {
             console.log('🔄 Converting attached file to permanent storage:', attachedFile.name);
             const permanentData = await this.convertToPermanentStorage(attachedFile.dataUrl, `attached-${attachedFile.name}`);
 
-            // Use the permanent storage data URL for Gemini API
-            const imageData = await this.imageUrlToBase64(permanentData.dataUrl);
+            // Use the original full-resolution data URL for Gemini API (not the optimized thumbnail)
+            const imageData = await this.imageUrlToBase64(permanentData.originalDataUrl || permanentData.dataUrl);
             const mimeType = attachedFile.file.type || 'image/jpeg';
 
             contentParts.push({
@@ -2689,8 +2689,8 @@ class AIImageEditorModule {
             // Convert attached file to permanent storage like PC upload
             const permanentData = await this.convertToPermanentStorage(attachedFile.dataUrl, `attached-edit-${attachedFile.name}`);
 
-            // Use the permanent storage data URL for Gemini API
-            const attachedImageData = await this.imageUrlToBase64(permanentData.dataUrl);
+            // Use the original full-resolution data URL for Gemini API (not the optimized thumbnail)
+            const attachedImageData = await this.imageUrlToBase64(permanentData.originalDataUrl || permanentData.dataUrl);
             const attachedMimeType = attachedFile.file.type || 'image/jpeg';
 
             contentParts.push({
