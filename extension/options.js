@@ -54,7 +54,7 @@ function loadSettings() {
       updateGeminiApiStatus(true);
     }
     document.getElementById('geminiModel').value = result.geminiModel || 'gemini-2.5-flash-lite-preview-06-17';
-    document.getElementById('geminiImageModel').value = result.geminiImageModel || 'gemini-2.5-flash-image-preview';
+    document.getElementById('geminiImageModel').value = result.geminiImageModel || 'gemini-2.0-flash-preview-image-generation';
 
     // Scheduling Settings
     document.getElementById('defaultDelay').value = result.defaultDelay || 10;
@@ -544,8 +544,7 @@ async function refreshGeminiModels() {
     const imageModelsToExclude = [
       'gemini-2.0-flash',
       'gemini-2.0-flash-001',
-      'gemini-2.0-flash-preview-image-generation',
-      'gemini-2.5-flash-image-preview'
+      'gemini-2.0-flash-preview-image-generation'
     ];
 
     // Add custom models if any (excluding image generation models)
@@ -658,11 +657,10 @@ function removeCustomModel() {
     'gemini-2.5-flash-lite-preview-06-17',
     'gemini-2.0-flash',
     'gemini-2.0-flash-001',
-    'gemini-2.0-flash-preview-image-generation',
-    'gemini-2.5-flash-image-preview'
+    'gemini-2.0-flash-preview-image-generation'
   ];
 
-  if (defaultModels.includes(selectedModel)) {
+  if (protectedModels.includes(selectedModel)) {
     showMessage('geminiMessage', '❌ Cannot remove default models', 'error');
     return;
   }

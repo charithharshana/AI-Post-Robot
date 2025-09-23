@@ -9,7 +9,7 @@ class GeminiAPI {
     this.apiKeys = [];
     this.currentKeyIndex = 0;
     this.model = 'gemini-2.5-flash-lite-preview-06-17';
-    this.imageModel = 'gemini-2.5-flash-image-preview';
+    this.imageModel = 'gemini-2.0-flash-preview-image-generation';
     this.lastRequestTime = 0;
     this.minRequestInterval = 1000; // 1 second between requests
   }
@@ -24,7 +24,7 @@ class GeminiAPI {
           this.apiKeys = result.geminiApiKeys.split('\n').map(key => key.trim()).filter(key => key);
         }
         this.model = result.geminiModel || 'gemini-2.5-flash-lite-preview-06-17';
-        this.imageModel = result.geminiImageModel || 'gemini-2.5-flash-image-preview';
+        this.imageModel = result.geminiImageModel || 'gemini-2.0-flash-preview-image-generation';
         resolve(this.apiKeys.length > 0);
       });
     });
