@@ -2,87 +2,135 @@
 
 ## Overview
 
-This project uses a **dual git strategy** for clean Chrome extension distribution:
+This project uses a **dual repository strategy** for clean Chrome extension distribution:
 
-- **Local Repository**: Contains ALL development files (source code, tests, docs, deployment scripts)
-- **GitHub Repository**: Contains ONLY clean Chrome extension files for distribution
+- **Development Repository**: `https://github.com/charithharshana/AI-Post-Robot-Development.git`
+  - Contains ALL development files (source code, docs, deployment scripts)
+  - Located at: `AI Post Robot\AI-Post-Robot-master`
+
+- **Distribution Repository**: `https://github.com/charithharshana/AI-Post-Robot.git`
+  - Contains ONLY clean Chrome extension files for public distribution
+  - Located at: `AI Post Robot\extension\extension`
 
 ## Quick Commands
 
-### For Local Testing
-```bash
-# Update local extension/ folder for Chrome testing
-node deploy.js local
-```
-
-### For GitHub Deployment
-```bash
-# Update local extension/ folder + deploy to GitHub
-node deploy.js github
-```
-
-### Platform-Specific Shortcuts
-
-**Windows:**
+### For Extension Deployment
 ```cmd
-deploy.bat local    # Local testing only
-deploy.bat github   # Full deployment
+# Run from the development workspace (AI-Post-Robot-master)
+deploy.bat
 ```
 
-**Linux/Mac:**
-```bash
-./deploy.sh local   # Local testing only
-./deploy.sh github  # Full deployment
-```
+This single command will:
+1. Copy all extension files from `extension/` to `../extension/extension/`
+2. Initialize/update the distribution git repository
+3. Commit and push changes to the public extension repository
 
-## What Each Command Does
+## Repository Structure
 
-### `node deploy.js local`
-- Copies all Chrome extension files to `extension/` folder
-- Ready for loading as unpacked extension in Chrome
-- **Files copied**: manifest.json, background.js, content.js, popup files, options files, scheduler files, API files, icons/, image-editor-module/
+The project maintains two separate git repositories:
 
-### `node deploy.js github`
-- First runs local update
-- Navigates to `extension/` folder
-- Sets up git repository with GitHub remote
-- Commits and pushes ONLY extension files to GitHub
-- Uses force push to maintain clean repository state
+1. **Development Repository** (`AI-Post-Robot-master/`)
+   - Remote: `https://github.com/charithharshana/AI-Post-Robot-Development.git`
+   - Contains source code, documentation, and deployment scripts
+   - Clean workspace with only development-related files
+   - Uses comprehensive `.gitignore` to exclude unnecessary files
+
+2. **Distribution Repository** (`../extension/extension/`)
+   - Remote: `https://github.com/charithharshana/AI-Post-Robot.git`
+   - Contains ONLY the clean extension files needed for Chrome Web Store
+   - Automatically managed by deployment script
+   - Public repository for extension distribution
 
 ## Directory Structure
 
 ```
-AI-Post-Robot-master/           # Local development repository
-├── extension/                  # Local extension folder (for Chrome testing)
-│   ├── manifest.json
-│   ├── background.js
-│   ├── content.js
-│   ├── popup.html
-│   ├── popup.js
-│   ├── options.html
-│   ├── options.js
-│   ├── advanced-scheduler.html
-│   ├── advanced-scheduler.js
-│   ├── schedule.html
-│   ├── schedule.js
-│   ├── robopost-api.js
-│   ├── gemini-api.js
-│   ├── icons/
-│   ├── image-editor-module/
-│   └── README.md
-├── docs/                       # Development documentation
-├── deploy.js                   # Main deployment script
-├── deploy.bat                  # Windows wrapper
-├── deploy.sh                   # Linux/Mac wrapper
-├── DEPLOYMENT.md               # This file
-└── [other development files]
-```
+AI Post Robot/
+├── AI-Post-Robot-master/       # Development workspace
+│   ├── extension/              # Source extension files
+│   │   ├── manifest.json
+│   │   ├── background.js
+│   │   ├── content.js
+│   │   ├── popup.html
+│   │   ├── popup.js
+│   │   ├── options.html
+│   │   ├── options.js
+│   │   ├── advanced-scheduler.html
+│   │   ├── advanced-scheduler.js
+│   │   ├── schedule.html
+│   │   ├── schedule.js
+│   │   ├── robopost-api.js
+│   │   ├── gemini-api.js
+│   │   ├── icons/
+│   │   ├── image-editor-module/
+│   │   └── README.md
+│   ├── docs/                   # Development documentation
+│   ├── deploy.bat              # Deployment script
+│   ├── DEPLOYMENT.md           # This file
+│   ├── README.md               # Project documentation
+│   ├── USER_GUIDE.md
+│   └── RELEASE_NOTES.md
+└── extension/
+    └── extension/              # Distribution copy (auto-managed)
+        ├── manifest.json       # Copied from development
+        ├── background.js       # Copied from development
+        └── ...                 # All extension files
 
 ## Chrome Extension Testing
 
-1. Run: `node deploy.js local`
+1. Run: `deploy.bat` from the development workspace
 2. Open Chrome → Extensions → Developer mode ON
 3. Click "Load unpacked"
+4. Select the `../extension/extension/` folder
+
+## Workflow
+
+### Development Workflow
+1. Make changes to files in `AI-Post-Robot-master/extension/`
+2. Test locally by running `deploy.bat`
+3. Load the extension in Chrome from `../extension/extension/`
+4. When ready to commit development changes:
+   ```cmd
+   git add .
+   git commit -m "Your development changes"
+   git push origin development
+   ```
+
+### Distribution Workflow
+1. When ready to publish extension updates:
+   ```cmd
+   deploy.bat
+   ```
+2. This automatically:
+   - Copies latest extension files to distribution directory
+   - Commits changes to the distribution repository
+   - Pushes to the public GitHub repository
+
+## Benefits of This Structure
+
+- **Clean Separation**: Development files stay separate from distribution files
+- **Automated Deployment**: Single command handles the entire deployment process
+- **Version Control**: Both development and distribution have proper git history
+- **Public Repository**: Clean extension repository for users and Chrome Web Store
+- **Development Privacy**: Development repository can remain private if needed
+
+## Troubleshooting
+
+### If deployment fails:
+1. Check that the `../extension/` directory exists
+2. Ensure you have git configured with proper credentials
+3. Verify network connectivity to GitHub
+
+### If extension doesn't load:
+1. Check Chrome's Extensions page for error messages
+2. Verify all required files are present in `../extension/extension/`
+3. Check manifest.json for syntax errors
+
+## Notes
+
+- The development repository remote points to: `AI-Post-Robot-Development.git`
+- The distribution repository remote points to: `AI-Post-Robot.git`
+- All deployment is handled automatically by the `deploy.bat` script
+- The `.gitignore` in the development repository excludes unnecessary files
 4. Select the `extension/` folder
 5. Extension is now loaded for testing
 

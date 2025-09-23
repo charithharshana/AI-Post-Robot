@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 REM AI Post Robot - Extension Deployment Script
 REM Copies extension files to distribution directory and manages git repositories
 
