@@ -639,6 +639,13 @@ class AIImageEditorModule {
         <div class="ai-editor-container">
           <div class="ai-editor-header">
             <h3>${modeTitle}</h3>
+            <div class="model-selection-container">
+              <label for="ai-model-select" class="model-label">🤖 AI Model:</label>
+              <select id="ai-model-select" class="model-select">
+                <option value="gemini-2.5-flash-image-preview">⭐ Gemini 2.5 Flash Image Preview (Latest & Fastest)</option>
+                <option value="gemini-2.0-flash-preview-image-generation">Gemini 2.0 Flash Preview Image Generation</option>
+              </select>
+            </div>
             <button id="ai-editor-close" class="btn btn-secondary">✖️ Close</button>
           </div>
           <div class="ai-editor-main">
@@ -975,6 +982,41 @@ class AIImageEditorModule {
         margin: 0;
         font-size: 20px;
         font-weight: 600;
+      }
+
+      .model-selection-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .model-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: white;
+        margin: 0;
+      }
+
+      .model-select {
+        padding: 6px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        font-size: 13px;
+        min-width: 200px;
+        backdrop-filter: blur(10px);
+      }
+
+      .model-select option {
+        background: #2d3748;
+        color: white;
+      }
+
+      .model-select:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.6);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
       }
 
       .ai-editor-main {
@@ -1913,6 +1955,18 @@ class AIImageEditorModule {
     document.getElementById('try-again-btn').addEventListener('click', () => {
       this.hideResultPreview();
     });
+
+    // Model selection change
+    document.getElementById('ai-model-select').addEventListener('change', (e) => {
+      const selectedModel = e.target.value;
+      console.log('🔄 AI Model changed to:', selectedModel);
+
+      // Update the Gemini API image model
+      if (this.geminiAPI) {
+        this.geminiAPI.imageModel = selectedModel;
+        console.log('✅ Updated Gemini API image model to:', selectedModel);
+      }
+    });
   }
 
   /**
@@ -1921,6 +1975,14 @@ class AIImageEditorModule {
   initializeAIEditorInterface(mode) {
     this.populatePromptsList(mode);
     this.setupParametersPanel();
+
+    // Set the current model in the dropdown
+    const modelSelect = document.getElementById('ai-model-select');
+    if (modelSelect && this.geminiAPI && this.geminiAPI.imageModel) {
+      modelSelect.value = this.geminiAPI.imageModel;
+      console.log('🔧 Set AI model dropdown to:', this.geminiAPI.imageModel);
+    }
+
     document.getElementById('chat-input').focus();
   }
 
