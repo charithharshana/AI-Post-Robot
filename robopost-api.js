@@ -768,6 +768,7 @@ class RoboPostAPI {
   async scheduleAlbumFromCapture(options) {
     const {
       imageUrls,
+      storageIds: providedStorageIds,
       caption,
       channelIds,
       scheduleAt,
@@ -778,15 +779,25 @@ class RoboPostAPI {
     try {
       console.log('🔄 Starting album scheduling...');
 
-      // Step 1: Upload all images
-      const storageIds = [];
-      for (const imageUrl of imageUrls) {
-        const storageId = await this.uploadMediaFromUrl(imageUrl);
-        storageIds.push(storageId);
-        console.log(`✅ Image ${storageIds.length}/${imageUrls.length} uploaded:`, storageId);
+      let finalStorageIds = [];
 
-        // Add delay between uploads to avoid rate limiting
-        await this.delay(500);
+      // Step 1: Handle image sources - either use provided storageIds or upload from URLs
+      if (providedStorageIds && providedStorageIds.length > 0) {
+        // Use provided storageIds (preferred method)
+        finalStorageIds = providedStorageIds;
+        console.log('🔍 Using provided storageIds:', finalStorageIds);
+      } else if (imageUrls && imageUrls.length > 0) {
+        // Upload images from URLs
+        for (const imageUrl of imageUrls) {
+          const storageId = await this.uploadMediaFromUrl(imageUrl);
+          finalStorageIds.push(storageId);
+          console.log(`✅ Image ${finalStorageIds.length}/${imageUrls.length} uploaded:`, storageId);
+
+          // Add delay between uploads to avoid rate limiting
+          await this.delay(500);
+        }
+      } else {
+        throw new Error('No image sources provided - need either imageUrls or storageIds');
       }
 
       // Step 2: Create simple album payload (like Python)
@@ -794,7 +805,7 @@ class RoboPostAPI {
         text: caption || '',
         channel_ids: channelIds,
         schedule_at: scheduleAt,
-        image_object_ids: storageIds,
+        image_object_ids: finalStorageIds,
         is_draft: false
       };
 
@@ -833,8 +844,8 @@ class RoboPostAPI {
           success: true,
           postId: scheduledPost.id,
           scheduledAt: scheduledPost.schedule_at,
-          imageCount: storageIds.length,
-          message: `Album with ${storageIds.length} images scheduled successfully!`
+          imageCount: finalStorageIds.length,
+          message: `Album with ${finalStorageIds.length} images scheduled successfully!`
         };
       } else {
         console.error('❌ Invalid album API response format. Expected object with scheduled_posts field');

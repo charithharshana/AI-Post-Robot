@@ -2961,6 +2961,10 @@ async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
     }
   }
 
+  // Declare these variables outside try block so they're accessible in catch block
+  let validImageUrls = [];
+  let validStorageIds = [];
+
   try {
     // DEBUG: Get platform settings and log them
     const platformSettings = getPlatformSpecificSettings();
@@ -2976,8 +2980,8 @@ async function scheduleAsAlbum(channels, scheduleDateTime, caption, title) {
     };
 
     // Add either imageUrls or storageIds based on what we have
-    const validImageUrls = imageUrls.filter(url => url !== null);
-    const validStorageIds = storageIds.filter(id => id !== null);
+    validImageUrls = imageUrls.filter(url => url !== null);
+    validStorageIds = storageIds.filter(id => id !== null);
 
     if (validStorageIds.length > 0 && validStorageIds.length === posts.length) {
       // All posts have storageIds - use them (preferred)
